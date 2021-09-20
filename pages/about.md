@@ -8,10 +8,13 @@ weight: 3
 # **About Me**
 
 Hi I am **{{ site.author.name }}** :wave:,<br>
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+
+I’m currently working with Aurelius Health Pty Ltd. A dynamic professional with 12+ years of experience in India and Australia in Application Development, Implementation, Project Management, Mobile App Development, CTI Solutions, Software Testing and Team Management. I have a bachelor’s degree in Computer Science Engineering.
+
+I've good experience in creating Android app using Java & Kotlin. I've also created many apps using Flutter.
 
 <div class="row">
-{% include about/skills.html title="Programming Skills" source=site.data.programming-skills %}
+{% include about/skills.html title="Core Skills" source=site.data.programming-skills %}
 {% include about/skills.html title="Other Skills" source=site.data.other-skills %}
 </div>
 
