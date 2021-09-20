@@ -1,0 +1,92 @@
+### Site Settings ###
+title               : Nagaraj Alagusundaram (Nag)
+description         : >-
+                      நன்மையும் தீமையும் நாடி நலம்புரிந்த
+                      தன்மையான் ஆளப் படும்.
+                                          - திருக்குறள்
+baseurl             : ""                     # Change to empty quotes if you are hosting your site at <your-username>.github.io directly
+repository          : YNaagAlgates/NaagAlgates     # Change to <your-username>/<your-username>.github.io (or remove it if you don't need remote projects)
+remote_theme        : YoussefRaafatNasry/portfolYOU
+
+
+### Plugins ###
+plugins:
+  - jemoji
+
+
+### Navbar Settings ###
+nav_exclude:                                            # The following paths are excluded from navbar
+  - pages/tags.html
+  - pages/404.html
+  - pages/index.md
+
+
+### Author Info ###
+author:
+  name              : Nagaraj Alagusundaram
+  image             : img/nag.jpeg
+# behance           : your_username
+# dribbble          : your_username
+  email             : me@nagaraj.com.au
+# facebook          : your_username
+  github            : NaagAlgates
+# gitlab            : your_username
+# instagram         : your_username
+# kaggle            : your_username
+  linkedin          : nalagusundaram
+# medium            : your_username
+# soundcloud        : your_username
+# spotify           : your_username
+  stackoverflow     : nagaraj-alagusundaram
+# tumblr            : your_username.tumblr.com
+# twitch            : your_username
+  twitter           : NAlagusundaram
+# vimeo             : your_username
+  youtube           : UChjjbVCsOpFeeyuwqe_y-gA
+# keybase           : your_username
+
+
+### Posts ###
+permalink: /blog/:title
+
+
+### Collections ###
+collections:
+  projects:
+    output: true
+    permalink: /projects/:name
+
+
+### Disqus ###
+disqus:
+  shortname: www-nagaraj-com-au                     # Your website Shortname on disqus
+
+
+### Analytics ###
+analytics:
+  enabled: false                                        # Set true to enable analytics
+  google:
+    tracking_id: 177595648
+
+
+### Defaults for collections ###
+defaults:
+  - scope:
+      path: ""
+      type: "projects"
+    values:
+      layout: "page"
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      comments: true                                   # Set to true to enable disqus comments
+
+### Exclude from processing ###
+exclude:
+  - README.md
+  - CONTRIBUTING.md
+  - LICENSE
+  - "*.log"
+
+github: [metadata]
