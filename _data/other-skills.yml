@@ -1,7 +1,30 @@
-- name: Adobe Photoshop
-  percentage: 95
-  color: info
 
-- name: Adobe Illustrator
-  percentage: 90
+
+
+- name: Constant Learner
+  percentage: 80
+  color: success
+
+- name: Blogger
+  percentage: 80
+  color: success
+
+- name: Cooking
+  percentage: 80
+  color: success
+
+- name: Chess Player
+  percentage: 80
+  color: success
+
+- name: Public Speaker
+  percentage: 80
+  color: success
+
+- name: Cricket Player
+  percentage: 80
+  color: success
+
+- name: Team Player
+  percentage: 80
   color: success
