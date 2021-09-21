@@ -1,10 +1,11 @@
 ---
-name: The Movies Project
-tools: [C#, XML, WPF]
-image: https://www.sketchappsources.com/resources/source-image/movie-badges-jurajjurik.png
-description: This project has an individual showcase page, not just a direct link to the project site or repo. Now you have more space to describe your awesome project!
+name: LGS
+tools: [Android, iOS, Pipelines]
+image: https://www.lgsuper.com.au/themes/lgs/img/logo-lgs-desktop.svg
+description: LGS have been building wealth on good foundations since 1997. They started out as the industry super fund for local government employees in NSW, but today Active Super is open to anyone who wants a secure future for themselves, their communities and the world.  
+external_url: https://www.lgsuper.com.au
 ---
-
+<!-- 
 # The Movies Project
 
 The Movies Project is something like **Netflix**, the only difference is that **it's not real**! It doesn't exist! I just created it to demonstrate how the **showcase** page looks like and how you can write whatever you want with full markdown support.
@@ -17,4 +18,4 @@ The Movies Project is something like **Netflix**, the only difference is that **
 
 <p class="text-center">
 {% include elements/button.html link="https://github.com/YoussefRaafatNasry/portfolYOU" text="Learn More" %}
-</p>
+</p> -->
