@@ -1,0 +1,39 @@
+- name: Java
+  percentage: 90
+  color: danger
+
+- name: Android
+  percentage: 90
+  color: danger
+
+- name: Git
+  percentage: 90
+  color: danger
+
+- name: Dart
+  percentage: 80
+  color: success
+
+- name: Flutter
+  percentage: 80
+  color: success
+
+- name: iOS
+  percentage: 70
+  color: dark
+
+- name: CI/CD
+  percentage: 70
+  color: dark
+
+- name: Kotlin
+  percentage: 65
+  color: info
+
+- name: C#
+  percentage: 60
+  color: warning
+
+- name: Python
+  percentage: 50
+  color: secondary
