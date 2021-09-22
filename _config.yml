@@ -1,11 +1,11 @@
 ### Site Settings ###
-title               : Nagaraj Alagusundaram (Nag)
+title               : Nagaraj
 description         : >-
                       நன்மையும் தீமையும் நாடி நலம்புரிந்த
                       தன்மையான் ஆளப் படும்.
                                           - திருக்குறள்
 baseurl             : ""                     # Change to empty quotes if you are hosting your site at <your-username>.github.io directly
-repository          : YNaagAlgates/NaagAlgates     # Change to <your-username>/<your-username>.github.io (or remove it if you don't need remote projects)
+repository          : YNaagAlgates/NaagAlgates.github.io     # Change to <your-username>/<your-username>.github.io (or remove it if you don't need remote projects)
 remote_theme        : YoussefRaafatNasry/portfolYOU
 
 
