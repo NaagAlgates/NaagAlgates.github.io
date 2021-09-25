@@ -22,10 +22,11 @@ Here we will create an app that will add new data to the list on the pull-to-ref
 ## Result
 
 Before we get into the actual code, first, let's see the output.
-https://user-images.githubusercontent.com/14884575/134681171-c5c730a8-c5fb-4610-9465-8cb772bebcb2.mov
 
 In this example, we are refreshing a list view, which has a list of integers. And on each refresh, we're adding ten more new rows.
 
+
+<img src="https://github.com/NaagAlgates/NaagAlgates.github.io/blob/0761016b8142b927c2eef549d920a243a3f83144/assets/img/posts/flutter-refreshindicator-widget/134681171-c5c730a8-c5fb-4610-9465-8cb772bebcb2.gif?raw=true" width="300" height="400">
 ## Code
 
 In the {% include elements/highlight.html text="initState" %} we're creating a new list.
