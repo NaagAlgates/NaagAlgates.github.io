@@ -1,8 +1,8 @@
 ---
 title: Why or How Flutter renders quickly?
 tags: [Flutter]
-style: 
-color: primary
+style: fill
+color: info
 comments: true
 description: Flutter is just another Framework and it is not a first of its kind but why it is trending?
 ---
