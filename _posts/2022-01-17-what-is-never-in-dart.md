@@ -15,20 +15,20 @@ To understand NEVER we should first understand nullable and non-nullable of dart
 
 The non-nullable types let you access all of the interesting methods, but can never ever contain {% include elements/highlight.html text="null" %}.
 
-![alt text](https://bit.ly/2TOsM7B "non-nullable types")
+![alt text](https://raw.githubusercontent.com/NaagAlgates/NaagAlgates.github.io/master/assets/img/posts/2022-01-17-what-is-never-in-dart/non-nullable.png "non-nullable types")
 
 ## **Nullable types:**
 
 Nullable types permit null and we let values flow from the non-nullable side to the nullable side because doing so is safe, but not the other direction.
 
-![alt text](https://bit.ly/2TOsM7B "nullable types")
+![alt text](https://raw.githubusercontent.com/NaagAlgates/NaagAlgates.github.io/master/assets/img/posts/2022-01-17-what-is-never-in-dart/nullable-types.png "nullable types")
 
 
 Since {% include elements/highlight.html text="Object" %} is non-nullable now, it is no longer a top type. {% include elements/highlight.html text="Null" %} is not a subtype of it. Dart has no named top type. If you need a top type, you want {% include elements/highlight.html text="Object?" %}. Likewise, {% include elements/highlight.html text="Null" %} is no longer the bottom type. If it was, everything would still be nullable. Instead, we’ve added a new bottom type named {% include elements/highlight.html text="Never" %}.
 
 In simple words, {% include elements/highlight.html text="Never" %} means that the function never returns, e.g. it ends the process or always throws an exception. 
 
-![alt text](https://bit.ly/2TOsM7B "never")
+![alt text](https://raw.githubusercontent.com/NaagAlgates/NaagAlgates.github.io/master/assets/img/posts/2022-01-17-what-is-never-in-dart/never.png "never")
 
 ## **How is it different from void?**
 
