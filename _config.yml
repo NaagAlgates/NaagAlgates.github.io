@@ -90,3 +90,5 @@ exclude:
   - "*.log"
 
 github: [metadata]
+
+theme: jekyll-theme-slate
