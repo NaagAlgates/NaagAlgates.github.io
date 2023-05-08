@@ -1,12 +1,22 @@
+- title: Senior Software Engineer, The Goto World, Sydney.
+  from: 2023
+  to: 2023
+  description: Flutter
+
+- title: Senior Software Engineer, JCube Software Solutions, Brisbane.
+  from: 2022
+  to: 2023
+  description: Flutter, Kotlin, Swift, Tech Lead & Engineering Head
+
 - title: Senior Software Engineer, Aurelius Health Pty Ltd, Sydney.
   from: 2021
-  to: Present
-  description: 
+  to: 2022
+  description: Flutter
 
 - title: Senior Software Engineer, XAM Consulting, Sydney.
   from: 2019
   to: 2021
-  description: 
+  description: Xamarin, Flutter, Kotlin, Java, Android
 
 - title: Tech Lead, Bahwan Cybertek Pvt Ltd, Chennai.
   from: 2016
