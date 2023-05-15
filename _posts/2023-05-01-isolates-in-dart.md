@@ -1,6 +1,6 @@
 ---
 title:  "Understanding Isolates in Dart and Flutter"
-tags: [dart, Flutter]
+tags: [dart, Flutter, Isolates, Concurrency]
 style: fill
 color: info
 comments: true
