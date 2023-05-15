@@ -1,12 +1,12 @@
 ---
-title: "Understanding Managed and Unmanaged Code in .NET"
-tags: [DotNet, CSharp, ManagedCode, UnmanagedCode, Interop]
+title: What is NEVER in dart?.
+tags: [dart, Flutter]
 style: fill
-color: info
+color: warning
 comments: true
-date: 2023-05-15
-description: In the world of .NET development, we often come across the terms "managed code" and "unmanaged code".
+description: In this post we're going to see what is NEVER in  dart.
 ---
+Source: [Nagaraj Alagusundaram](https://www.nagaraj.com.au)
 
 ## Understanding Managed and Unmanaged Code in .NET
 
