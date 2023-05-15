@@ -2,7 +2,7 @@
 title: "Understanding Managed and Unmanaged Code in .NET"
 tags: [DotNet, CSharp, ManagedCode, UnmanagedCode, Interop]
 style: fill
-color: info
+color: dark
 comments: true
 description: In the world of .NET development, we often come across the terms "managed code" and "unmanaged code".
 ---
