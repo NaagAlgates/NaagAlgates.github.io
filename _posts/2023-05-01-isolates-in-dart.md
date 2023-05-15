@@ -2,7 +2,7 @@
 title:  "Understanding Isolates in Dart and Flutter"
 tags: [dart, Flutter]
 style: fill
-color: primary
+color: info
 comments: true
 description: Isolates are Dart's model for multithreading, but with an important distinction.
 ---
