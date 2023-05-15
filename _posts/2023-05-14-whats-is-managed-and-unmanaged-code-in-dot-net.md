@@ -1,11 +1,11 @@
 ---
 title: "Understanding Managed and Unmanaged Code in .NET"
-tags: [#DotNet, #CSharp, #ManagedCode, #UnmanagedCode, #Interop, #Programming, #Coding, #SoftwareDevelopment, #CLR, #MemoryManagement, #TypeSafety, #ExceptionHandling, #PInvoke, #COMInterop]
+tags: [DotNet, CSharp, ManagedCode, UnmanagedCode, Interop, Programming, Coding, SoftwareDevelopment, CLR, MemoryManagement, TypeSafety, ExceptionHandling, PInvoke, COMInterop]
 style: fill
 color: info
 comments: true
 date: 2023-05-15
-description: In this post we're going to see what is NEVER in  dart.
+description: In the world of .NET development, we often come across the terms "managed code" and "unmanaged code".
 ---
 
 ## Understanding Managed and Unmanaged Code in .NET
