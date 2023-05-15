@@ -3,7 +3,7 @@ title: "Understanding Sealed Classes in Kotlin"
 tags: [Kotlin, SealedClasses, Programming, Coding]
 style: fill
 color: info
-color: success
+color: light
 comments: true
 description: Sealed classes are a powerful feature in Kotlin that allow you to represent restricted class hierarchies.
 ---
