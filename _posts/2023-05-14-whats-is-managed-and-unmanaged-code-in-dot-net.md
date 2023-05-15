@@ -1,6 +1,6 @@
 ---
 title: "Understanding Managed and Unmanaged Code in .NET"
-tags: [DotNet, CSharp, ManagedCode, UnmanagedCode, Interop, Programming, Coding, SoftwareDevelopment, CLR, MemoryManagement, TypeSafety, ExceptionHandling, PInvoke, COMInterop]
+tags: [DotNet, CSharp, ManagedCode, UnmanagedCode, Interop]
 style: fill
 color: info
 comments: true
