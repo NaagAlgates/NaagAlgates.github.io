@@ -2,7 +2,7 @@
 title: "Final Keyword for Classes in Dart 3.10"
 tags: [Dart, Flutter, Switch, Dart 3.10]
 style: fill
-color: success
+color: primary
 comments: true
 description: Dart 3.10 introduces a significant keyword for classes - `final`.
 ---
