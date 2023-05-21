@@ -1,5 +1,5 @@
 ---
-title: Dart's Evolution: Introducing the `interface` Keyword.
+title: Dart's Evolution - Introducing the `interface` Keyword.
 tags: [Dart, Flutter, interface, abstract, Dart 3.10]
 style: border
 color: warning
