@@ -2,7 +2,7 @@
 title: Dart's Evolution - Introducing the `interface` Keyword.
 tags: [Dart, Flutter, interface, abstract, Dart 3.10]
 style: border
-color: warning
+color: secondary
 comments: true
 description: In this post we're going to see the interface keyword and it's new vs old approach comparison.
 ---
