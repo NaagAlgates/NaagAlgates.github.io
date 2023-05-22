@@ -1,7 +1,7 @@
 ---
 title: What is floor() in dart?.
 tags: [dart, Flutter]
-style: border
+style: fill
 color: primary
 comments: true
 description: In this post we're going to see what is floor() in  dart.

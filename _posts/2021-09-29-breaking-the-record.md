@@ -1,7 +1,7 @@
 ---
 title: Breaking the Record [Solved]
 tags: [Kotlin, Hackerrank, YouTube]
-style: fill
+style: border
 color: danger
 comments: true
 description: Kotlin solution for breaking the record problem.

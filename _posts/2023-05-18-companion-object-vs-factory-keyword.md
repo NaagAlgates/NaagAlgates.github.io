@@ -1,7 +1,7 @@
 ---
 title: "Comparing Kotlin's Companion Object vs Dart's Factory Keyword"
 tags: [Kotlin, Dart, Programming, Companion Object, Factory]
-style: fill
+style: border
 color: danger
 comments: true
 description: In the world of programming languages, controlling object creation is a crucial aspect of software development. Kotlin and Dart, two popular languages, offer mechanisms to achieve this control.
