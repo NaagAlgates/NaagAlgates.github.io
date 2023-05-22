@@ -1,7 +1,7 @@
 ---
 title: "Understanding Sealed Classes in Kotlin"
 tags: [Kotlin, SealedClasses, Programming, Coding]
-style: fill
+style: border
 color: info
 color: light
 comments: true

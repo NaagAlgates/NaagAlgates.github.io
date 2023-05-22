@@ -1,7 +1,7 @@
 ---
 title: "Switch expression in dart"
 tags: [Dart, Flutter, Switch, Dart 3.10]
-style: fill
+style: border
 color: success
 comments: true
 description: In Dart, the `switch` statement is a control flow statement that lets a variable be tested for equality against a list of values. Each value is called a case, and the variable being switched on is checked for each case.

@@ -1,7 +1,7 @@
 ---
 title: "Understanding the base Keyword in Dart 3.10"
 tags: [Flutter, Dart, base class, Dart 3.10]
-style: border
+style: fill
 color: warning
 comments: true
 description: Dart 3.10 introduced a new keyword `base` as part of its language enhancements. 

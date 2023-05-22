@@ -1,7 +1,7 @@
 ---
 title: Flutter RefreshIndicator Widget
 tags: [Flutter]
-style: fill
+style: border
 color: success
 comments: true
 description: Wouldn't it be great if you could show your users that a list is refreshing? With RefreshIndicator you can! Learn how to set up the widget and customize the refresh icon.
