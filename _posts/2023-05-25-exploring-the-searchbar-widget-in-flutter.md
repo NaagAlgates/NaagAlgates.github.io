@@ -2,7 +2,7 @@
 title: Exploring the SearchBar Widget in Flutter 3.10
 tags: [Dart, Flutter, Dart 3.10, SearchBar]
 style: fill
-color: warning
+color: info
 comments: true
 description: With the release of Flutter 3.10, there are many new exciting features. One of them is the new `SearchBar` widget, which makes it easier to add a fully functional and customizable search bar in your Flutter apps. Here, I'm going to walk you through how to use it.
 
