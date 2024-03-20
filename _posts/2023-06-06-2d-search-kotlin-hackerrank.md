@@ -82,4 +82,4 @@ fun main() {
 
 {% endhighlight %}
 
-That's it for today's post. I hope this walkthrough helps you understand how to solve this type of pattern searching problems. Happy coding!
+That's it for today's post. I hope this walkthrough helps you understand how to solve this type of pattern searching problems. Happy coding

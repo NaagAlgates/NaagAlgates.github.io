@@ -1,37 +1,64 @@
 
-
-- name: Flutter
-  percentage: 90
-  color: success
-
-- name: Dart
-  percentage: 90
-  color: success
-  
-- name: Kotlin
-  percentage: 90
-  color: danger
-
 - name: Git
   percentage: 90
+  color: success
+
+- name: Flutter
+  percentage: 80
   color: danger
 
+- name: React
+  percentage: 70
+  color: warning
+
+- name: TypeScript
+  percentage: 70
+  color: danger
+
+- name: JavaScript
+  percentage: 70
+  color: warning
+
+- name: Dart
+  percentage: 68
+  color: danger
+  
+- name: Kotlin
+  percentage: 67
+  color: success
+
 - name: Android
-  percentage: 89
+  percentage: 66
   color: danger
 
 - name: CI/CD
-  percentage: 87
+  percentage: 65
   color: dark
 
 - name: iOS
-  percentage: 70
+  percentage: 60
+  color: dark
+
+- name: AWS
+  percentage: 60
+  color: warning
+
+- name: Xamarin
+  percentage: 60
   color: dark
 
 - name: C#
   percentage: 60
-  color: warning
+  color: secondary
 
 - name: Python
   percentage: 50
-  color: secondary
+  color: warning
+
+- name: PowerBi
+  percentage: 50
+  color: warning
+
+- name: Stripe
+  percentage: 50
+  color: warning
