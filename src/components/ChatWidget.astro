@@ -1,0 +1,198 @@
+---
+import { CHAT_API_URL } from "../consts";
+---
+
+<div class="chat" data-chat data-api={CHAT_API_URL}>
+  <button class="chat-fab" type="button" data-chat-open aria-label="Ask about the blog" title="Ask about the blog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"></path>
+    </svg>
+  </button>
+
+  <div class="chat-panel" data-chat-panel hidden role="dialog" aria-label="Blog assistant" aria-modal="false">
+    <header class="chat-head">
+      <div class="chat-title mono">
+        <span class="chat-dot"></span> ask the blog
+      </div>
+      <button class="chat-x" type="button" data-chat-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+      </button>
+    </header>
+
+    <div class="chat-log" data-chat-log aria-live="polite">
+      <div class="chat-msg bot">
+        <p>Hi! Ask me anything about Nagaraj or the posts here — I'll answer from the blog and point you to the relevant writing.</p>
+      </div>
+    </div>
+
+    <form class="chat-form" data-chat-form>
+      <input
+        type="text"
+        data-chat-input
+        placeholder="e.g. what are Dart isolates?"
+        aria-label="Your question"
+        autocomplete="off"
+      />
+      <button type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>
+      </button>
+    </form>
+    <p class="chat-foot mono">answers grounded in human-written posts · may be imperfect</p>
+  </div>
+</div>
+
+<script>
+  type Post = {
+    title: string;
+    url: string;
+    tags: string[];
+    date: string;
+    description: string;
+    text: string;
+  };
+
+  const STOP = new Set("a an the and or of to in is are for on with how what why when does do this that you your i my me about it".split(" "));
+
+  document.querySelectorAll<HTMLElement>("[data-chat]").forEach((root) => {
+    const api = (root.dataset.api || "").trim();
+    const fab = root.querySelector<HTMLButtonElement>("[data-chat-open]")!;
+    const panel = root.querySelector<HTMLElement>("[data-chat-panel]")!;
+    const closeBtn = root.querySelector<HTMLButtonElement>("[data-chat-close]")!;
+    const log = root.querySelector<HTMLElement>("[data-chat-log]")!;
+    const form = root.querySelector<HTMLFormElement>("[data-chat-form]")!;
+    const input = root.querySelector<HTMLInputElement>("[data-chat-input]")!;
+
+    let index: Post[] | null = null;
+    let loading: Promise<Post[]> | null = null;
+    let busy = false;
+
+    const loadIndex = () => {
+      if (index) return Promise.resolve(index);
+      if (!loading) {
+        loading = fetch("/chat-index.json")
+          .then((r) => r.json())
+          .then((d: Post[]) => (index = d))
+          .catch(() => (index = []));
+      }
+      return loading;
+    };
+
+    const openPanel = () => {
+      panel.hidden = false;
+      root.classList.add("open");
+      loadIndex();
+      setTimeout(() => input.focus(), 50);
+    };
+    const closePanel = () => {
+      panel.hidden = true;
+      root.classList.remove("open");
+    };
+
+    fab.addEventListener("click", () => (panel.hidden ? openPanel() : closePanel()));
+    closeBtn.addEventListener("click", closePanel);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !panel.hidden) closePanel();
+    });
+
+    const esc = (s: string) =>
+      s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+
+    const bubble = (who: "user" | "bot", html: string) => {
+      const el = document.createElement("div");
+      el.className = `chat-msg ${who}`;
+      el.innerHTML = html;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+      return el;
+    };
+
+    const sourcesHtml = (posts: Post[]) =>
+      posts.length
+        ? `<div class="chat-sources"><span class="mono">sources</span>${posts
+            .map((p) => `<a href="${p.url}">${esc(p.title)}</a>`)
+            .join("")}</div>`
+        : "";
+
+    const rank = (q: string, posts: Post[]): Post[] => {
+      const terms = q
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length > 2 && !STOP.has(t));
+      if (!terms.length) return [];
+      const scored = posts.map((p) => {
+        const title = p.title.toLowerCase();
+        const tags = p.tags.join(" ").toLowerCase();
+        const text = (p.text + " " + p.description).toLowerCase();
+        let score = 0;
+        for (const t of terms) {
+          if (title.includes(t)) score += 5;
+          if (tags.includes(t)) score += 3;
+          const m = text.split(t).length - 1;
+          score += Math.min(m, 5);
+        }
+        return { p, score };
+      });
+      return scored
+        .filter((s) => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 4)
+        .map((s) => s.p);
+    };
+
+    const ask = async (q: string) => {
+      busy = true;
+      const typing = bubble("bot", `<span class="chat-typing"><i></i><i></i><i></i></span>`);
+
+      const posts = await loadIndex();
+      const hits = rank(q, posts);
+
+      // Retrieval-only mode (no Worker configured yet)
+      if (!api) {
+        typing.remove();
+        if (hits.length) {
+          bubble(
+            "bot",
+            `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`,
+          );
+        } else {
+          bubble("bot", `<p>I couldn't find a matching post. Try a topic like “dart”, “kotlin”, or “flutter”.</p>`);
+        }
+        busy = false;
+        return;
+      }
+
+      // LLM mode via the Cloudflare Worker
+      try {
+        const res = await fetch(api, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            question: q,
+            contexts: hits.map((p) => ({ title: p.title, url: p.url, text: p.text })),
+          }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        typing.remove();
+        const answer = (data.answer || "").trim() || "Sorry, I don't have an answer for that.";
+        bubble("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${sourcesHtml(hits)}`);
+      } catch {
+        typing.remove();
+        bubble(
+          "bot",
+          `<p>I couldn't reach the assistant right now, but these posts look relevant:</p>${sourcesHtml(hits)}`,
+        );
+      }
+      busy = false;
+    };
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q || busy) return;
+      bubble("user", `<p>${esc(q)}</p>`);
+      input.value = "";
+      ask(q);
+    });
+  });
+</script>

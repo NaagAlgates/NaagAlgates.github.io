@@ -152,8 +152,14 @@
   "hotPaths": [
     {
       "path": "src/styles/global.css",
-      "accessCount": 8,
-      "lastAccessed": 1780399381412,
+      "accessCount": 9,
+      "lastAccessed": 1780435107206,
+      "type": "file"
+    },
+    {
+      "path": "src/consts.ts",
+      "accessCount": 6,
+      "lastAccessed": 1780434987733,
       "type": "file"
     },
     {
@@ -163,15 +169,15 @@
       "type": "file"
     },
     {
-      "path": "src/pages/index.astro",
-      "accessCount": 4,
-      "lastAccessed": 1780399469355,
+      "path": "src/layouts/BaseLayout.astro",
+      "accessCount": 5,
+      "lastAccessed": 1780435059071,
       "type": "file"
     },
     {
-      "path": "src/consts.ts",
+      "path": "src/pages/index.astro",
       "accessCount": 4,
-      "lastAccessed": 1780400173998,
+      "lastAccessed": 1780399469355,
       "type": "file"
     },
     {
@@ -184,12 +190,6 @@
       "path": "src/pages/tags/[tag].astro",
       "accessCount": 2,
       "lastAccessed": 1780397876430,
-      "type": "file"
-    },
-    {
-      "path": "src/layouts/BaseLayout.astro",
-      "accessCount": 2,
-      "lastAccessed": 1780398824024,
       "type": "file"
     },
     {
@@ -382,6 +382,42 @@
       "path": "linkedin-added.png",
       "accessCount": 1,
       "lastAccessed": 1780400224873,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ChatWidget.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780435030518,
+      "type": "file"
+    },
+    {
+      "path": "worker/wrangler.toml",
+      "accessCount": 1,
+      "lastAccessed": 1780435126374,
+      "type": "file"
+    },
+    {
+      "path": "worker/src/index.js",
+      "accessCount": 1,
+      "lastAccessed": 1780435144273,
+      "type": "file"
+    },
+    {
+      "path": "worker/package.json",
+      "accessCount": 1,
+      "lastAccessed": 1780435153306,
+      "type": "file"
+    },
+    {
+      "path": "worker/README.md",
+      "accessCount": 1,
+      "lastAccessed": 1780435168642,
+      "type": "file"
+    },
+    {
+      "path": "chat-widget.png",
+      "accessCount": 1,
+      "lastAccessed": 1780435421934,
       "type": "file"
     }
   ],

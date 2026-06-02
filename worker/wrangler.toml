@@ -1,0 +1,14 @@
+name = "nagaraj-chat"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+# Cloudflare Workers AI binding (free tier). No API key needed.
+[ai]
+binding = "AI"
+
+[vars]
+# Origins allowed to call this Worker (comma-separated). Update if your domain changes.
+ALLOWED_ORIGINS = "https://www.nagaraj.com.au,https://nagaraj.com.au,http://localhost:4321"
+# Model to use — any Workers AI text model. Swap if you prefer another.
+MODEL = "@cf/meta/llama-3.1-8b-instruct"

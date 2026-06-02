@@ -20,6 +20,12 @@ export const LINKS = [
 export const KEYWORDS =
   "technology, AI, software, programming, human-written, no AI, written by a human, blog";
 
+// Chat widget: URL of the Cloudflare Worker that returns LLM answers.
+// Leave "" to run the widget in retrieval-only mode (it links to the most
+// relevant posts). Set this to your deployed Worker URL once it's live —
+// e.g. "https://nagaraj-chat.<your-subdomain>.workers.dev". See worker/README.md.
+export const CHAT_API_URL = "";
+
 /** URL-safe slug for a tag, e.g. "Dart 3.10" -> "dart-3-10". */
 export function tagSlug(tag: string): string {
   return tag
