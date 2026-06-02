@@ -47,3 +47,21 @@ npm run dev      # http://localhost:4321
 
 Markdown supports headings, **bold**, lists, links, images (remote URLs are fine),
 and fenced code blocks ` ```lang ` which get syntax highlighting automatically.
+
+## New posts and the chat widget
+
+You don't need to do anything extra for the "ask the blog" chat widget — **new
+posts are included automatically.**
+
+- The chat's knowledge comes from `/chat-index.json`, which is **regenerated on
+  every build** from `src/content/blog/`. Add a post and push → the deploy
+  rebuilds the index with the new post → the widget can find and answer from it.
+- The Cloudflare Worker (LLM mode) stores no content. The site sends it the most
+  relevant post excerpts per question, so it reasons over new posts too — **no
+  Worker redeploy needed when you add blogs.**
+- Redeploy the Worker only if you change the Worker code, the model, or the
+  author bio in `worker/src/index.js`.
+
+> Caching note: right after a deploy, a CDN-cached `chat-index.json` may take a
+> few minutes (or a cache purge) to refresh, so a brand-new post can lag briefly
+> in the chat — the post page itself is live immediately.
