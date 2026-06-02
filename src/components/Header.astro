@@ -1,0 +1,16 @@
+---
+import ThemeToggle from "./ThemeToggle.astro";
+import { SITE_TITLE, HUMAN_LINE } from "../consts";
+---
+
+<header class="site-header">
+  <div class="wrap topbar">
+    <a class="brand mono" href="/">{SITE_TITLE.toLowerCase()}<span class="tld">.dev</span></a>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span class="badge" title="Every post on this site is written by a human, never by AI.">
+        <span class="dot"></span>{HUMAN_LINE}
+      </span>
+      <ThemeToggle />
+    </div>
+  </div>
+</header>

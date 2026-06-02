@@ -1,0 +1,42 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PostList from "../components/PostList.astro";
+import { SITE_TITLE, SITE_URL, AUTHOR, SITE_DESCRIPTION } from "../consts";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  name: SITE_TITLE,
+  url: SITE_URL,
+  description: SITE_DESCRIPTION,
+  inLanguage: "en",
+  author: { "@type": "Person", name: AUTHOR },
+  creator: { "@type": "Person", name: AUTHOR },
+};
+---
+
+<BaseLayout jsonLd={jsonLd}>
+  <section class="intro">
+    <p class="prompt mono">~ $ whoami<span class="blink">▋</span></p>
+    <h1 class="mono">nagaraj<span class="tld">.dev</span></h1>
+    <p class="bio">
+      A human writing about <code>tech</code> and <code>AI</code> — notes, ideas,
+      and anything worth thinking through. Every post here is written by a
+      person, never by AI.
+    </p>
+    <div class="links">
+      <a href="https://github.com/NaagAlgates">github</a>
+      <a href="/rss.xml">rss</a>
+    </div>
+  </section>
+
+  <p class="section-label mono">
+    <span class="hash">#</span> writing &nbsp;·&nbsp; {posts.length} posts
+  </p>
+  <PostList posts={posts} />
+</BaseLayout>

@@ -1,0 +1,40 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PostList from "../../components/PostList.astro";
+import { tagSlug } from "../../consts";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog");
+  // slug -> readable label (first spelling wins)
+  const tags = new Map<string, string>();
+  for (const post of posts) {
+    for (const t of post.data.tags) {
+      const slug = tagSlug(t);
+      if (!tags.has(slug)) tags.set(slug, t.toLowerCase());
+    }
+  }
+  return [...tags.entries()].map(([slug, label]) => ({
+    params: { tag: slug },
+    props: {
+      tag: label,
+      posts: posts
+        .filter((p) => p.data.tags.some((t) => tagSlug(t) === slug))
+        .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
+    },
+  }));
+}
+
+const { tag, posts } = Astro.props;
+---
+
+<BaseLayout
+  title={`#${tag}`}
+  description={`Human-written posts tagged ${tag}.`}
+>
+  <p class="section-label mono" style="margin-top:40px;">
+    <span class="hash">#</span>{tag} &nbsp;·&nbsp; {posts.length} posts
+  </p>
+  <PostList posts={posts} />
+  <a class="back-link" href="/">← all posts</a>
+</BaseLayout>

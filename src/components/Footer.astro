@@ -1,0 +1,14 @@
+---
+import { HUMAN_LINE, LINKS, AUTHOR } from "../consts";
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer wrap">
+  <span class="badge">
+    <span class="dot"></span>{HUMAN_LINE}
+  </span>
+  <div style="display:flex; gap:16px; align-items:center;">
+    {LINKS.map((l) => <a href={l.href}>{l.label}</a>)}
+    <span>© {year} {AUTHOR}</span>
+  </div>
+</footer>
