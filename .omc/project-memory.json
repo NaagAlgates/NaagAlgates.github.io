@@ -152,8 +152,8 @@
   "hotPaths": [
     {
       "path": "src/styles/global.css",
-      "accessCount": 9,
-      "lastAccessed": 1780435107206,
+      "accessCount": 10,
+      "lastAccessed": 1780442794283,
       "type": "file"
     },
     {
@@ -178,6 +178,18 @@
       "path": "src/pages/index.astro",
       "accessCount": 4,
       "lastAccessed": 1780399469355,
+      "type": "file"
+    },
+    {
+      "path": "WRITING.md",
+      "accessCount": 3,
+      "lastAccessed": 1780435640630,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ChatWidget.astro",
+      "accessCount": 3,
+      "lastAccessed": 1780442928843,
       "type": "file"
     },
     {
@@ -307,12 +319,6 @@
       "type": "file"
     },
     {
-      "path": "WRITING.md",
-      "accessCount": 1,
-      "lastAccessed": 1780397834409,
-      "type": "file"
-    },
-    {
       "path": "home-dark.png",
       "accessCount": 1,
       "lastAccessed": 1780397928703,
@@ -382,12 +388,6 @@
       "path": "linkedin-added.png",
       "accessCount": 1,
       "lastAccessed": 1780400224873,
-      "type": "file"
-    },
-    {
-      "path": "src/components/ChatWidget.astro",
-      "accessCount": 1,
-      "lastAccessed": 1780435030518,
       "type": "file"
     },
     {

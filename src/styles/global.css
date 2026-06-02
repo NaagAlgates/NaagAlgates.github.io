@@ -667,6 +667,11 @@ a.tag:hover {
   pointer-events: none;
 }
 
+/* The [hidden] attribute must win over the display:flex below, so the panel
+   starts minimised and the close button actually hides it. */
+.chat-panel[hidden] {
+  display: none;
+}
 .chat-panel {
   position: fixed;
   right: 24px;

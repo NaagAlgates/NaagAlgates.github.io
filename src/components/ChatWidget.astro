@@ -113,7 +113,7 @@ import { CHAT_API_URL } from "../consts";
             .join("")}</div>`
         : "";
 
-    const rank = (q: string, posts: Post[]): Post[] => {
+    const rank = (q: string, posts: Post[]): { p: Post; score: number }[] => {
       const terms = q
         .toLowerCase()
         .split(/[^a-z0-9]+/)
@@ -135,8 +135,7 @@ import { CHAT_API_URL } from "../consts";
       return scored
         .filter((s) => s.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 4)
-        .map((s) => s.p);
+        .slice(0, 4);
     };
 
     const ask = async (q: string) => {
@@ -144,24 +143,29 @@ import { CHAT_API_URL } from "../consts";
       const typing = bubble("bot", `<span class="chat-typing"><i></i><i></i><i></i></span>`);
 
       const posts = await loadIndex();
-      const hits = rank(q, posts);
+      const ranked = rank(q, posts);
+      const hits = ranked.map((r) => r.p);
+      const best = ranked[0]?.score ?? 0;
+      const relevant = best >= 3; // below this, matches are just incidental
 
-      // Retrieval-only mode (no Worker configured yet)
+      // Retrieval-only mode (Worker not configured yet): no LLM and no author
+      // bio on the client, so only surface posts when the match is genuinely
+      // relevant — otherwise be honest instead of dumping unrelated posts.
       if (!api) {
         typing.remove();
-        if (hits.length) {
+        if (relevant) {
+          bubble("bot", `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`);
+        } else {
           bubble(
             "bot",
-            `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`,
+            `<p>The AI assistant isn't switched on for this site yet, so I can only point to posts — and I couldn't find a close match for that. Try a topic like <em>dart</em>, <em>flutter</em>, or <em>kotlin</em>, or <a href="/">browse all posts</a>.</p>`,
           );
-        } else {
-          bubble("bot", `<p>I couldn't find a matching post. Try a topic like “dart”, “kotlin”, or “flutter”.</p>`);
         }
         busy = false;
         return;
       }
 
-      // LLM mode via the Cloudflare Worker
+      // LLM mode via the Cloudflare Worker (answers bio + post questions).
       try {
         const res = await fetch(api, {
           method: "POST",
@@ -175,13 +179,10 @@ import { CHAT_API_URL } from "../consts";
         const data = await res.json();
         typing.remove();
         const answer = (data.answer || "").trim() || "Sorry, I don't have an answer for that.";
-        bubble("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${sourcesHtml(hits)}`);
+        bubble("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${relevant ? sourcesHtml(hits) : ""}`);
       } catch {
         typing.remove();
-        bubble(
-          "bot",
-          `<p>I couldn't reach the assistant right now, but these posts look relevant:</p>${sourcesHtml(hits)}`,
-        );
+        bubble("bot", `<p>I couldn't reach the assistant right now. Please try again in a moment.</p>`);
       }
       busy = false;
     };
