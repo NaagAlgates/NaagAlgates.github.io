@@ -151,9 +151,21 @@
   },
   "hotPaths": [
     {
+      "path": "src/styles/global.css",
+      "accessCount": 7,
+      "lastAccessed": 1780398913250,
+      "type": "file"
+    },
+    {
       "path": "src/pages/blog/[slug].astro",
       "accessCount": 3,
       "lastAccessed": 1780397886525,
+      "type": "file"
+    },
+    {
+      "path": "src/consts.ts",
+      "accessCount": 3,
+      "lastAccessed": 1780398808180,
       "type": "file"
     },
     {
@@ -163,15 +175,21 @@
       "type": "file"
     },
     {
-      "path": "src/consts.ts",
-      "accessCount": 2,
-      "lastAccessed": 1780397865057,
-      "type": "file"
-    },
-    {
       "path": "src/pages/tags/[tag].astro",
       "accessCount": 2,
       "lastAccessed": 1780397876430,
+      "type": "file"
+    },
+    {
+      "path": "src/layouts/BaseLayout.astro",
+      "accessCount": 2,
+      "lastAccessed": 1780398824024,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/index.astro",
+      "accessCount": 2,
+      "lastAccessed": 1780398833198,
       "type": "file"
     },
     {
@@ -223,12 +241,6 @@
       "type": "file"
     },
     {
-      "path": "src/styles/global.css",
-      "accessCount": 1,
-      "lastAccessed": 1780397617870,
-      "type": "file"
-    },
-    {
       "path": "src/components/BaseHead.astro",
       "accessCount": 1,
       "lastAccessed": 1780397656322,
@@ -259,21 +271,9 @@
       "type": "file"
     },
     {
-      "path": "src/layouts/BaseLayout.astro",
-      "accessCount": 1,
-      "lastAccessed": 1780397719795,
-      "type": "file"
-    },
-    {
       "path": "src/components/PostList.astro",
       "accessCount": 1,
       "lastAccessed": 1780397729616,
-      "type": "file"
-    },
-    {
-      "path": "src/pages/index.astro",
-      "accessCount": 1,
-      "lastAccessed": 1780397739563,
       "type": "file"
     },
     {
@@ -328,6 +328,30 @@
       "path": "README.md",
       "accessCount": 1,
       "lastAccessed": 1780398056414,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Sidebar.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780398818147,
+      "type": "file"
+    },
+    {
+      "path": "v2-home-wide.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398937172,
+      "type": "file"
+    },
+    {
+      "path": "v2-post-wide.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398953408,
+      "type": "file"
+    },
+    {
+      "path": "v2-home-mobile.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398972538,
       "type": "file"
     }
   ],

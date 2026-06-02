@@ -1,0 +1,33 @@
+---
+import ThemeToggle from "./ThemeToggle.astro";
+import { SITE_TITLE, HUMAN_LINE, LINKS, AUTHOR } from "../consts";
+const year = new Date().getFullYear();
+---
+
+<aside class="sidebar">
+  <div class="sidebar-inner">
+    <a class="brand-lg" href="/" aria-label={`${SITE_TITLE} — home`}>
+      <span class="prompt-sm mono">~ $ whoami</span>
+      <span class="word mono">{SITE_TITLE.toLowerCase()}<span class="cursor">▋</span></span>
+    </a>
+
+    <p class="side-bio">
+      A human writing about <code>tech</code> and <code>AI</code> — notes, ideas,
+      and anything worth thinking through. Every post here is written by a
+      person, never by AI.
+    </p>
+
+    <nav class="side-links mono" aria-label="Links">
+      {LINKS.map((l) => <a href={l.href}>{l.label}</a>)}
+    </nav>
+
+    <div class="side-tools">
+      <span class="badge" title="Every post is written by a human, never by AI.">
+        <span class="dot"></span>{HUMAN_LINE}
+      </span>
+      <ThemeToggle />
+    </div>
+
+    <p class="side-foot mono">© {year} {AUTHOR}</p>
+  </div>
+</aside>

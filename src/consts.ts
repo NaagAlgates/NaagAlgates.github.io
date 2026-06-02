@@ -9,9 +9,10 @@ export const SITE_DESCRIPTION =
 
 export const HUMAN_LINE = "Human-written · No AI";
 
-// Public links shown in the header/footer (no email, no personal socials beyond these).
+// Public links shown in the sidebar (no email, no personal socials beyond these).
 export const LINKS = [
   { label: "github", href: "https://github.com/NaagAlgates" },
+  { label: "bluesky", href: "https://bsky.app/profile/nagaraj.com.au" },
   { label: "rss", href: "/rss.xml" },
 ];
 

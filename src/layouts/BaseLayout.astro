@@ -1,7 +1,6 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
-import Header from "../components/Header.astro";
-import Footer from "../components/Footer.astro";
+import Sidebar from "../components/Sidebar.astro";
 import { SITE_TITLE } from "../consts";
 
 interface Props {
@@ -18,10 +17,11 @@ const { title = SITE_TITLE, description, jsonLd } = Astro.props;
     <BaseHead title={title} description={description} jsonLd={jsonLd} />
   </head>
   <body>
-    <Header />
-    <main class="wrap">
-      <slot />
-    </main>
-    <Footer />
+    <div class="shell">
+      <Sidebar />
+      <main class="content">
+        <slot />
+      </main>
+    </div>
   </body>
 </html>
