@@ -18,7 +18,19 @@ const year = new Date().getFullYear();
     </p>
 
     <nav class="side-links mono" aria-label="Links">
-      {LINKS.map((l) => <a href={l.href}>{l.label}</a>)}
+      {
+        LINKS.map((l) => {
+          const external = l.href.startsWith("http");
+          return (
+            <a
+              href={l.href}
+              {...(external ? { target: "_blank", rel: "me noopener" } : {})}
+            >
+              {l.label}
+            </a>
+          );
+        })
+      }
     </nav>
 
     <div class="side-tools">

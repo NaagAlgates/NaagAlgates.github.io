@@ -170,8 +170,8 @@
     },
     {
       "path": "src/consts.ts",
-      "accessCount": 3,
-      "lastAccessed": 1780398808180,
+      "accessCount": 4,
+      "lastAccessed": 1780400173998,
       "type": "file"
     },
     {
@@ -190,6 +190,12 @@
       "path": "src/layouts/BaseLayout.astro",
       "accessCount": 2,
       "lastAccessed": 1780398824024,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Sidebar.astro",
+      "accessCount": 2,
+      "lastAccessed": 1780400186107,
       "type": "file"
     },
     {
@@ -331,12 +337,6 @@
       "type": "file"
     },
     {
-      "path": "src/components/Sidebar.astro",
-      "accessCount": 1,
-      "lastAccessed": 1780398818147,
-      "type": "file"
-    },
-    {
       "path": "v2-home-wide.png",
       "accessCount": 1,
       "lastAccessed": 1780398937172,
@@ -376,6 +376,12 @@
       "path": "feat-search-live.png",
       "accessCount": 1,
       "lastAccessed": 1780399572831,
+      "type": "file"
+    },
+    {
+      "path": "linkedin-added.png",
+      "accessCount": 1,
+      "lastAccessed": 1780400224873,
       "type": "file"
     }
   ],
