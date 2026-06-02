@@ -1,0 +1,389 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1780395004639,
+  "projectRoot": "/Users/jcube/Projects/Web/NaagAlgates.github.io",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Ruby",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Gemfile"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "bundler",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "assets",
+      "pages"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "MyMoodz": {
+      "path": "MyMoodz",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1780395004619,
+      "keyFiles": []
+    },
+    "_data": {
+      "path": "_data",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780395004625,
+      "keyFiles": [
+        "other-skills.yml",
+        "programming-skills.yml",
+        "social-media.yml",
+        "timeline.yml"
+      ]
+    },
+    "_posts": {
+      "path": "_posts",
+      "purpose": null,
+      "fileCount": 18,
+      "lastAccessed": 1780395004625,
+      "keyFiles": [
+        "2020-09-10-why-or-how-fluter-renders-quickly.md",
+        "2021-09-20-flutter-refreshindicator-widget.md",
+        "2021-09-29-breaking-the-record.md",
+        "2021-11-28-what-is-floor-dart.md",
+        "2022-01-17-what-is-never-in-dart.md"
+      ]
+    },
+    "_projects": {
+      "path": "_projects",
+      "purpose": null,
+      "fileCount": 17,
+      "lastAccessed": 1780395004625,
+      "keyFiles": [
+        "(1) Arli.md",
+        "(10) Nuance.md",
+        "(11) ChristianSuper.md",
+        "(12) Energy Super.md",
+        "(13) Linkgroup Investor Cennter.md"
+      ]
+    },
+    "assets": {
+      "path": "assets",
+      "purpose": "Static assets",
+      "fileCount": 1,
+      "lastAccessed": 1780395004626,
+      "keyFiles": [
+        "favicon.ico"
+      ]
+    },
+    "nagaraj": {
+      "path": "nagaraj",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780395004626,
+      "keyFiles": [
+        "CNAME",
+        "index.html",
+        "videos.html"
+      ]
+    },
+    "nataraj": {
+      "path": "nataraj",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1780395004626,
+      "keyFiles": [
+        "gulpfile.js",
+        "index.html",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    "pages": {
+      "path": "pages",
+      "purpose": "Page components",
+      "fileCount": 7,
+      "lastAccessed": 1780395004626,
+      "keyFiles": [
+        "404.html",
+        "about.md",
+        "blog.html",
+        "index.md",
+        "projects.html"
+      ]
+    },
+    "resume": {
+      "path": "resume",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1780395004627,
+      "keyFiles": []
+    },
+    "nataraj/assets": {
+      "path": "nataraj/assets",
+      "purpose": "Static assets",
+      "fileCount": 0,
+      "lastAccessed": 1780395004627,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/styles/global.css",
+      "accessCount": 8,
+      "lastAccessed": 1780399381412,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/blog/[slug].astro",
+      "accessCount": 5,
+      "lastAccessed": 1780399482671,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/index.astro",
+      "accessCount": 4,
+      "lastAccessed": 1780399469355,
+      "type": "file"
+    },
+    {
+      "path": "src/consts.ts",
+      "accessCount": 4,
+      "lastAccessed": 1780400173998,
+      "type": "file"
+    },
+    {
+      "path": "scripts/migrate-posts.mjs",
+      "accessCount": 2,
+      "lastAccessed": 1780397524119,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/tags/[tag].astro",
+      "accessCount": 2,
+      "lastAccessed": 1780397876430,
+      "type": "file"
+    },
+    {
+      "path": "src/layouts/BaseLayout.astro",
+      "accessCount": 2,
+      "lastAccessed": 1780398824024,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Sidebar.astro",
+      "accessCount": 2,
+      "lastAccessed": 1780400186107,
+      "type": "file"
+    },
+    {
+      "path": "pages/about.md",
+      "accessCount": 1,
+      "lastAccessed": 1780395212583,
+      "type": "file"
+    },
+    {
+      "path": "mockup-a.png",
+      "accessCount": 1,
+      "lastAccessed": 1780396357069,
+      "type": "file"
+    },
+    {
+      "path": "mockup-b.png",
+      "accessCount": 1,
+      "lastAccessed": 1780396360065,
+      "type": "file"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-02-astro-blog-refresh-design.md",
+      "accessCount": 1,
+      "lastAccessed": 1780396648644,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 1,
+      "lastAccessed": 1780397402841,
+      "type": "file"
+    },
+    {
+      "path": "astro.config.mjs",
+      "accessCount": 1,
+      "lastAccessed": 1780397450097,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.json",
+      "accessCount": 1,
+      "lastAccessed": 1780397455011,
+      "type": "file"
+    },
+    {
+      "path": "src/content.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1780397460130,
+      "type": "file"
+    },
+    {
+      "path": "src/components/BaseHead.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397656322,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ThemeToggle.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397672956,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Header.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397689253,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Footer.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397702450,
+      "type": "file"
+    },
+    {
+      "path": "src/components/FormattedDate.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397712896,
+      "type": "file"
+    },
+    {
+      "path": "src/components/PostList.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397729616,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/rss.xml.js",
+      "accessCount": 1,
+      "lastAccessed": 1780397768091,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/404.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780397774375,
+      "type": "file"
+    },
+    {
+      "path": "public/favicon.svg",
+      "accessCount": 1,
+      "lastAccessed": 1780397788485,
+      "type": "file"
+    },
+    {
+      "path": "scripts/new-post.mjs",
+      "accessCount": 1,
+      "lastAccessed": 1780397798339,
+      "type": "file"
+    },
+    {
+      "path": "WRITING.md",
+      "accessCount": 1,
+      "lastAccessed": 1780397834409,
+      "type": "file"
+    },
+    {
+      "path": "home-dark.png",
+      "accessCount": 1,
+      "lastAccessed": 1780397928703,
+      "type": "file"
+    },
+    {
+      "path": "post-dark.png",
+      "accessCount": 1,
+      "lastAccessed": 1780397955816,
+      "type": "file"
+    },
+    {
+      "path": "post-light-code.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398000781,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1780398056414,
+      "type": "file"
+    },
+    {
+      "path": "v2-home-wide.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398937172,
+      "type": "file"
+    },
+    {
+      "path": "v2-post-wide.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398953408,
+      "type": "file"
+    },
+    {
+      "path": "v2-home-mobile.png",
+      "accessCount": 1,
+      "lastAccessed": 1780398972538,
+      "type": "file"
+    },
+    {
+      "path": "src/components/PostBrowser.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780399405765,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Share.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780399453510,
+      "type": "file"
+    },
+    {
+      "path": "feat-share-live.png",
+      "accessCount": 1,
+      "lastAccessed": 1780399568333,
+      "type": "file"
+    },
+    {
+      "path": "feat-search-live.png",
+      "accessCount": 1,
+      "lastAccessed": 1780399572831,
+      "type": "file"
+    },
+    {
+      "path": "linkedin-added.png",
+      "accessCount": 1,
+      "lastAccessed": 1780400224873,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

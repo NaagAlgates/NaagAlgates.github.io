@@ -1,0 +1,74 @@
+---
+import { getCollection, render } from "astro:content";
+import type { CollectionEntry } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import FormattedDate from "../../components/FormattedDate.astro";
+import Share from "../../components/Share.astro";
+import { SITE_TITLE, SITE_URL, AUTHOR, tagSlug } from "../../consts";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog");
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+interface Props {
+  post: CollectionEntry<"blog">;
+}
+const { post } = Astro.props;
+const { Content } = await render(post);
+const url = new URL(`/blog/${post.id}`, SITE_URL).href;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.pubDate.toISOString(),
+  keywords: post.data.tags.join(", "),
+  inLanguage: "en",
+  url,
+  mainEntityOfPage: { "@type": "WebPage", "@id": url },
+  author: { "@type": "Person", name: AUTHOR },
+  publisher: { "@type": "Person", name: AUTHOR },
+  // Explicit, machine-readable signal: this content is human-authored.
+  creativeWorkStatus: "Human-written, not AI-generated",
+};
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.description}
+  jsonLd={jsonLd}
+>
+  <article>
+    <header class="article-header">
+      <p class="meta mono">
+        <FormattedDate date={post.data.pubDate} variant="long" /> · by {AUTHOR} ·
+        ✍ human-written
+      </p>
+      <h1>{post.data.title}</h1>
+      {
+        post.data.tags.length > 0 && (
+          <div class="tags">
+            {post.data.tags.map((t) => (
+              <a class="tag" href={`/tags/${tagSlug(t)}`}>
+                {t.toLowerCase()}
+              </a>
+            ))}
+          </div>
+        )
+      }
+    </header>
+
+    <Share title={post.data.title} url={url} />
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    <a class="back-link" href="/">← all posts</a>
+  </article>
+</BaseLayout>

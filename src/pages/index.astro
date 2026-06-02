@@ -1,0 +1,25 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PostBrowser from "../components/PostBrowser.astro";
+import { SITE_TITLE, SITE_URL, AUTHOR, SITE_DESCRIPTION } from "../consts";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  name: SITE_TITLE,
+  url: SITE_URL,
+  description: SITE_DESCRIPTION,
+  inLanguage: "en",
+  author: { "@type": "Person", name: AUTHOR },
+  creator: { "@type": "Person", name: AUTHOR },
+};
+---
+
+<BaseLayout jsonLd={jsonLd}>
+  <PostBrowser posts={posts} pageSize={10} />
+</BaseLayout>
