@@ -13,14 +13,15 @@ ALLOWED_ORIGINS = "https://www.nagaraj.com.au,https://nagaraj.com.au,http://loca
 # Model to use — any Workers AI text model. Swap if you prefer another.
 MODEL = "@cf/meta/llama-3.1-8b-instruct"
 
-# Per-IP rate limit (free). 15 requests / 60s per IP. The Worker uses this only
-# if the binding deploys; if your wrangler errors on it, comment this block out
-# and rate-limiting is simply skipped (origin + Turnstile still apply).
-[[unsafe.bindings]]
-name = "RATE_LIMITER"
-type = "ratelimit"
-namespace_id = "1001"
-simple = { limit = 15, period = 60 }
+# Per-IP rate limit (free). 15 requests / 60s per IP.
+# Commented out so the FIRST deploy is guaranteed clean. To enable: uncomment,
+# then `npx wrangler deploy`. The Worker auto-detects the binding — origin
+# allow-list + Turnstile already protect the endpoint without it.
+# [[unsafe.bindings]]
+# name = "RATE_LIMITER"
+# type = "ratelimit"
+# namespace_id = "1001"
+# simple = { limit = 15, period = 60 }
 
 # Turnstile: do NOT put the secret here. Set it as an encrypted secret:
 #   npx wrangler secret put TURNSTILE_SECRET
