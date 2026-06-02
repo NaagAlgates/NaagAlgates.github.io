@@ -1,8 +1,8 @@
 ---
-import { CHAT_API_URL } from "../consts";
+import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
 ---
 
-<div class="chat" data-chat data-api={CHAT_API_URL}>
+<div class="chat" data-chat data-api={CHAT_API_URL} data-turnstile={TURNSTILE_SITE_KEY}>
   <button class="chat-fab" type="button" data-chat-open aria-label="Ask about the blog" title="Ask about the blog">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"></path>
@@ -37,6 +37,7 @@ import { CHAT_API_URL } from "../consts";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>
       </button>
     </form>
+    <div class="cf-turnstile-host" data-turnstile-host></div>
     <p class="chat-foot mono">answers grounded in human-written posts · may be imperfect</p>
   </div>
 </div>
@@ -62,9 +63,59 @@ import { CHAT_API_URL } from "../consts";
     const form = root.querySelector<HTMLFormElement>("[data-chat-form]")!;
     const input = root.querySelector<HTMLInputElement>("[data-chat-input]")!;
 
+    const turnstileKey = (root.dataset.turnstile || "").trim();
+    const tsHost = root.querySelector<HTMLElement>("[data-turnstile-host]")!;
+    let tsWidgetId: string | null = null;
+    let tsResolve: ((t: string | null) => void) | null = null;
+
     let index: Post[] | null = null;
     let loading: Promise<Post[]> | null = null;
     let busy = false;
+
+    // --- Turnstile (only when a site key is configured) ---------------------
+    const loadTurnstile = (): Promise<void> => {
+      if (!turnstileKey || (window as any).turnstile) return Promise.resolve();
+      return new Promise((resolve) => {
+        const s = document.createElement("script");
+        s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        s.async = true;
+        s.defer = true;
+        s.onload = () => resolve();
+        s.onerror = () => resolve();
+        document.head.appendChild(s);
+      });
+    };
+
+    const getTurnstileToken = async (): Promise<string | null> => {
+      if (!turnstileKey) return null;
+      await loadTurnstile();
+      const ts = (window as any).turnstile;
+      if (!ts) return null;
+      if (tsWidgetId === null) {
+        tsWidgetId = ts.render(tsHost, {
+          sitekey: turnstileKey,
+          execution: "execute",
+          appearance: "interaction-only",
+          callback: (token: string) => { tsResolve?.(token); tsResolve = null; },
+          "error-callback": () => { tsResolve?.(null); tsResolve = null; },
+        });
+      }
+      return new Promise<string | null>((resolve) => {
+        tsResolve = resolve;
+        try {
+          ts.reset(tsWidgetId);
+          ts.execute(tsWidgetId);
+        } catch {
+          resolve(null);
+        }
+        setTimeout(() => {
+          if (tsResolve === resolve) {
+            tsResolve = null;
+            resolve(null);
+          }
+        }, 12000);
+      });
+    };
 
     const loadIndex = () => {
       if (index) return Promise.resolve(index);
@@ -167,12 +218,23 @@ import { CHAT_API_URL } from "../consts";
 
       // LLM mode via the Cloudflare Worker (answers bio + post questions).
       try {
+        let turnstileToken: string | null = null;
+        if (turnstileKey) {
+          turnstileToken = await getTurnstileToken();
+          if (!turnstileToken) {
+            typing.remove();
+            bubble("bot", `<p>Couldn't verify you're human. Please try again.</p>`);
+            busy = false;
+            return;
+          }
+        }
         const res = await fetch(api, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             question: q,
             contexts: hits.map((p) => ({ title: p.title, url: p.url, text: p.text })),
+            turnstileToken,
           }),
         });
         if (!res.ok) throw new Error(String(res.status));
