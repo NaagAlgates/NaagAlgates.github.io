@@ -1,0 +1,156 @@
+---
+import FormattedDate from "./FormattedDate.astro";
+import type { CollectionEntry } from "astro:content";
+
+interface Props {
+  posts: CollectionEntry<"blog">[];
+  pageSize?: number;
+}
+const { posts, pageSize = 10 } = Astro.props;
+---
+
+<div class="browser" data-page-size={pageSize}>
+  <div class="searchbar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>
+    </svg>
+    <input
+      type="search"
+      id="post-search"
+      placeholder="search posts by title or tag…"
+      aria-label="Search posts"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <span class="kbd" data-kbd>/</span>
+  </div>
+
+  <p class="section-label mono" data-status>
+    <span class="hash">#</span> writing &nbsp;·&nbsp; {posts.length} posts
+  </p>
+
+  <div class="post-list" data-list>
+    {
+      posts.map((post) => (
+        <a
+          class="post-item"
+          href={`/blog/${post.id}`}
+          data-search={`${post.data.title} ${post.data.tags.join(" ")} ${post.data.description}`.toLowerCase()}
+        >
+          <div class="top">
+            <span class="title" data-title={post.data.title}>
+              {post.data.title}
+            </span>
+            <span class="date mono">
+              <FormattedDate date={post.data.pubDate} variant="dot" />
+            </span>
+          </div>
+          {post.data.description && <p class="desc">{post.data.description}</p>}
+          {post.data.tags.length > 0 && (
+            <div class="tags">
+              {post.data.tags.map((t) => (
+                <span class="tag">{t.toLowerCase()}</span>
+              ))}
+            </div>
+          )}
+        </a>
+      ))
+    }
+  </div>
+
+  <p class="no-results mono" data-empty hidden>
+    no posts match “<span data-empty-q></span>”.
+  </p>
+
+  <nav class="pagination" data-pagination aria-label="Pagination"></nav>
+</div>
+
+<script>
+  const esc = (s: string) =>
+    s.replace(/[&<>"]/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string,
+    );
+  const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  document.querySelectorAll<HTMLElement>(".browser").forEach((root) => {
+    const pageSize = Number(root.dataset.pageSize) || 10;
+    const items = [...root.querySelectorAll<HTMLAnchorElement>(".post-item")];
+    const input = root.querySelector<HTMLInputElement>("#post-search")!;
+    const status = root.querySelector<HTMLElement>("[data-status]")!;
+    const empty = root.querySelector<HTMLElement>("[data-empty]")!;
+    const emptyQ = root.querySelector<HTMLElement>("[data-empty-q]")!;
+    const pager = root.querySelector<HTMLElement>("[data-pagination]")!;
+    let page = 1;
+
+    const highlight = (item: HTMLElement, q: string) => {
+      const titleEl = item.querySelector<HTMLElement>(".title")!;
+      const orig = titleEl.dataset.title || titleEl.textContent || "";
+      titleEl.innerHTML = q
+        ? esc(orig).replace(new RegExp(`(${escRe(q)})`, "ig"), "<mark>$1</mark>")
+        : esc(orig);
+    };
+
+    const render = () => {
+      const q = input.value.trim();
+      const ql = q.toLowerCase();
+      const matched = items.filter((it) => !ql || it.dataset.search!.includes(ql));
+      items.forEach((it) => highlight(it, q));
+
+      const paginate = !q;
+      const pages = Math.max(1, Math.ceil(matched.length / pageSize));
+      if (page > pages) page = pages;
+
+      items.forEach((it) => (it.style.display = "none"));
+      const visible = paginate
+        ? matched.slice((page - 1) * pageSize, page * pageSize)
+        : matched;
+      visible.forEach((it) => (it.style.display = ""));
+
+      status.innerHTML = q
+        ? `<span class="hash">#</span> writing &nbsp;·&nbsp; ${matched.length} result${matched.length === 1 ? "" : "s"} for “${esc(q)}”`
+        : `<span class="hash">#</span> writing &nbsp;·&nbsp; ${matched.length} posts`;
+
+      empty.hidden = matched.length !== 0;
+      if (matched.length === 0) emptyQ.textContent = q;
+
+      pager.innerHTML = "";
+      if (paginate && pages > 1) {
+        const btn = (label: string, opts: { cur?: boolean; disabled?: boolean; go: number }) => {
+          const b = document.createElement("button");
+          b.textContent = label;
+          if (opts.cur) b.className = "cur";
+          if (opts.disabled) b.disabled = true;
+          b.addEventListener("click", () => {
+            page = opts.go;
+            render();
+            root.querySelector("[data-list]")!.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+          pager.appendChild(b);
+        };
+        btn("‹ prev", { disabled: page === 1, go: page - 1 });
+        for (let p = 1; p <= pages; p++) btn(String(p), { cur: p === page, go: p });
+        btn("next ›", { disabled: page === pages, go: page + 1 });
+      }
+    };
+
+    input.addEventListener("input", () => {
+      page = 1;
+      render();
+    });
+
+    // "/" focuses search; Esc clears it.
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "/" && document.activeElement !== input) {
+        e.preventDefault();
+        input.focus();
+      } else if (e.key === "Escape" && document.activeElement === input) {
+        input.value = "";
+        page = 1;
+        render();
+        input.blur();
+      }
+    });
+
+    render();
+  });
+</script>

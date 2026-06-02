@@ -1,7 +1,7 @@
 ---
 import { getCollection } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import PostList from "../components/PostList.astro";
+import PostBrowser from "../components/PostBrowser.astro";
 import { SITE_TITLE, SITE_URL, AUTHOR, SITE_DESCRIPTION } from "../consts";
 
 const posts = (await getCollection("blog")).sort(
@@ -21,8 +21,5 @@ const jsonLd = {
 ---
 
 <BaseLayout jsonLd={jsonLd}>
-  <p class="section-label mono">
-    <span class="hash">#</span> writing &nbsp;·&nbsp; {posts.length} posts
-  </p>
-  <PostList posts={posts} />
+  <PostBrowser posts={posts} pageSize={10} />
 </BaseLayout>

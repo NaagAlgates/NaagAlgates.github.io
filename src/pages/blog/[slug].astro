@@ -3,6 +3,7 @@ import { getCollection, render } from "astro:content";
 import type { CollectionEntry } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import FormattedDate from "../../components/FormattedDate.astro";
+import Share from "../../components/Share.astro";
 import { SITE_TITLE, SITE_URL, AUTHOR, tagSlug } from "../../consts";
 
 export async function getStaticPaths() {
@@ -61,6 +62,8 @@ const jsonLd = {
         )
       }
     </header>
+
+    <Share title={post.data.title} url={url} />
 
     <div class="prose">
       <Content />

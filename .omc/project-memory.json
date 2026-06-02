@@ -152,14 +152,20 @@
   "hotPaths": [
     {
       "path": "src/styles/global.css",
-      "accessCount": 7,
-      "lastAccessed": 1780398913250,
+      "accessCount": 8,
+      "lastAccessed": 1780399381412,
       "type": "file"
     },
     {
       "path": "src/pages/blog/[slug].astro",
-      "accessCount": 3,
-      "lastAccessed": 1780397886525,
+      "accessCount": 5,
+      "lastAccessed": 1780399482671,
+      "type": "file"
+    },
+    {
+      "path": "src/pages/index.astro",
+      "accessCount": 4,
+      "lastAccessed": 1780399469355,
       "type": "file"
     },
     {
@@ -184,12 +190,6 @@
       "path": "src/layouts/BaseLayout.astro",
       "accessCount": 2,
       "lastAccessed": 1780398824024,
-      "type": "file"
-    },
-    {
-      "path": "src/pages/index.astro",
-      "accessCount": 2,
-      "lastAccessed": 1780398833198,
       "type": "file"
     },
     {
@@ -352,6 +352,30 @@
       "path": "v2-home-mobile.png",
       "accessCount": 1,
       "lastAccessed": 1780398972538,
+      "type": "file"
+    },
+    {
+      "path": "src/components/PostBrowser.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780399405765,
+      "type": "file"
+    },
+    {
+      "path": "src/components/Share.astro",
+      "accessCount": 1,
+      "lastAccessed": 1780399453510,
+      "type": "file"
+    },
+    {
+      "path": "feat-share-live.png",
+      "accessCount": 1,
+      "lastAccessed": 1780399568333,
+      "type": "file"
+    },
+    {
+      "path": "feat-search-live.png",
+      "accessCount": 1,
+      "lastAccessed": 1780399572831,
       "type": "file"
     }
   ],
