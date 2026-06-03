@@ -710,6 +710,11 @@ a.tag:hover {
   background: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
+.chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .chat-x {
   background: none;
   border: 0;
