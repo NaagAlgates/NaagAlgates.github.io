@@ -29,7 +29,7 @@ export const CHAT_API_URL = "https://nagaraj-chat.naaglabs.workers.dev";
 // Optional Cloudflare Turnstile site key (PUBLIC — safe to expose). Leave "" to
 // disable. When set, the chat asks visitors to pass a Turnstile check and sends
 // the token to the Worker (which must also have the TURNSTILE_SECRET set).
-export const TURNSTILE_SITE_KEY = "";
+export const TURNSTILE_SITE_KEY = "0x4AAAAAADd4WUNVSCQSuGU4";
 
 /** URL-safe slug for a tag, e.g. "Dart 3.10" -> "dart-3-10". */
 export function tagSlug(tag: string): string {
