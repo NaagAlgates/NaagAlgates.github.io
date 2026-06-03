@@ -7,7 +7,7 @@ export const AUTHOR = "Nagaraj Alagusundaram";
 export const SITE_DESCRIPTION =
   "A human-written blog about technology and AI — notes, ideas, and anything worth thinking through. 100% written by a person, never by AI.";
 
-export const HUMAN_LINE = "Human-written · No AI";
+export const HUMAN_LINE = "Human-written blogs";
 
 // Public links shown in the sidebar (connect / contact).
 export const LINKS = [
