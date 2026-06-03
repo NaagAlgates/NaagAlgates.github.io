@@ -15,6 +15,7 @@
   --line-soft: #1b232c;
   --accent: #4ade80;
   --accent-2: #38bdf8;
+  --on-accent: #0e1116; /* text/icons on a green background (dark on bright lime) */
   --grid: rgba(255, 255, 255, 0.022);
   --tag-bg: rgba(56, 189, 248, 0.07);
   --tag-border: rgba(56, 189, 248, 0.2);
@@ -34,6 +35,7 @@
   --line-soft: #ededea;
   --accent: #1f9d57;
   --accent-2: #0b7ec2;
+  --on-accent: #ffffff; /* white text/icons on the darker green of light mode */
   --grid: rgba(0, 0, 0, 0.025);
   --tag-bg: rgba(11, 126, 194, 0.07);
   --tag-border: rgba(11, 126, 194, 0.22);
@@ -388,7 +390,7 @@ hr {
 }
 .pagination button.cur {
   background: var(--accent);
-  color: #0e1116;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 700;
 }
@@ -647,7 +649,7 @@ a.tag:hover {
   border-radius: 50%;
   border: 1px solid var(--line);
   background: var(--accent);
-  color: #0e1116;
+  color: var(--on-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -757,7 +759,7 @@ a.tag:hover {
 .chat-msg.user {
   align-self: flex-end;
   background: var(--accent);
-  color: #0e1116;
+  color: var(--on-accent);
 }
 .chat-sources {
   display: flex;
@@ -825,7 +827,7 @@ a.tag:hover {
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--accent);
-  color: #0e1116;
+  color: var(--on-accent);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
