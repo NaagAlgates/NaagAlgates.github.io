@@ -65,11 +65,18 @@ export default {
       return json({ error: "POST only" }, 405, cors);
     }
 
-    // 1) Origin allow-list — blocks other sites' browsers and naive callers.
+    // 1) Origin allow-list + Sec-Fetch-Site. Browsers set Sec-Fetch-* headers
+    // automatically and page JS cannot override them, so requiring one means a
+    // spoofed Origin header alone is not enough to pass. (Defense-in-depth; the
+    // real gates are the per-IP rate limit and Turnstile below.)
     const allowed = allowedOrigins(env);
     const origin = request.headers.get("Origin") || "";
     if (allowed.length && !allowed.includes(origin)) {
       return json({ error: "Forbidden origin" }, 403, cors);
+    }
+    const fetchSite = request.headers.get("Sec-Fetch-Site");
+    if (!fetchSite || fetchSite === "none") {
+      return json({ error: "Forbidden" }, 403, cors);
     }
 
     const ip = request.headers.get("CF-Connecting-IP") || "anon";
