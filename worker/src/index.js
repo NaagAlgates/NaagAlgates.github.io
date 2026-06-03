@@ -1,23 +1,32 @@
 // Cloudflare Worker: blog chat backend for nagaraj.com.au
-// Receives { question, contexts: [{title, url, text}] }, calls Workers AI with
-// the blog content + Nagaraj's bio as grounding, returns { answer }.
+// Receives { question, contexts:[{title,url,text}], turnstileToken? }, grounds the
+// model with the post excerpts + Nagaraj's bio, returns { answer }.
 //
-// Deploy: see worker/README.md  (npm i -g wrangler && wrangler deploy)
+// Abuse protection (each layer is optional and only active when configured):
+//   1. Origin allow-list (ALLOWED_ORIGINS)            — always on
+//   2. Per-IP rate limit (RATE_LIMITER binding)       — on if the binding exists
+//   3. Cloudflare Turnstile (TURNSTILE_SECRET secret) — on if the secret is set
+//
+// Deploy + setup: see worker/README.md
 
 const BIO = `Nagaraj Alagusundaram is a software engineer with 13+ years of experience building mobile and backend applications using Flutter, Kotlin, Swift, and Xamarin, with cloud experience on AWS and Azure. He has led teams, conducted technical interviews, and defined technical roadmaps, and has shipped products across health & fitness, dating, language learning, super apps, and employee engagement. He writes about technology and AI at nagaraj.com.au. Every post on the site is written by a human, never by AI.`;
 
-function corsHeaders(request, env) {
-  const allowed = (env.ALLOWED_ORIGINS || "")
+function allowedOrigins(env) {
+  return (env.ALLOWED_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function corsHeaders(request, env) {
+  const allowed = allowedOrigins(env);
   const origin = request.headers.get("Origin") || "";
   const allow = allowed.includes(origin) ? origin : allowed[0] || "*";
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Vary": "Origin",
+    Vary: "Origin",
   };
 }
 
@@ -26,6 +35,23 @@ function json(body, status, headers) {
     status,
     headers: { "content-type": "application/json; charset=utf-8", ...headers },
   });
+}
+
+async function verifyTurnstile(token, ip, secret) {
+  const form = new FormData();
+  form.append("secret", secret);
+  form.append("response", token || "");
+  if (ip) form.append("remoteip", ip);
+  try {
+    const r = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      { method: "POST", body: form },
+    );
+    const data = await r.json();
+    return !!data.success;
+  } catch {
+    return false;
+  }
 }
 
 export default {
@@ -39,11 +65,39 @@ export default {
       return json({ error: "POST only" }, 405, cors);
     }
 
+    // 1) Origin allow-list + Sec-Fetch-Site. Browsers set Sec-Fetch-* headers
+    // automatically and page JS cannot override them, so requiring one means a
+    // spoofed Origin header alone is not enough to pass. (Defense-in-depth; the
+    // real gates are the per-IP rate limit and Turnstile below.)
+    const allowed = allowedOrigins(env);
+    const origin = request.headers.get("Origin") || "";
+    if (allowed.length && !allowed.includes(origin)) {
+      return json({ error: "Forbidden origin" }, 403, cors);
+    }
+    const fetchSite = request.headers.get("Sec-Fetch-Site");
+    if (!fetchSite || fetchSite === "none") {
+      return json({ error: "Forbidden" }, 403, cors);
+    }
+
+    const ip = request.headers.get("CF-Connecting-IP") || "anon";
+
+    // 2) Per-IP rate limit (only if the RATE_LIMITER binding is configured).
+    if (env.RATE_LIMITER && typeof env.RATE_LIMITER.limit === "function") {
+      const { success } = await env.RATE_LIMITER.limit({ key: ip });
+      if (!success) return json({ error: "Too many requests" }, 429, cors);
+    }
+
     let payload;
     try {
       payload = await request.json();
     } catch {
       return json({ error: "Invalid JSON" }, 400, cors);
+    }
+
+    // 3) Turnstile verification (only if the TURNSTILE_SECRET secret is set).
+    if (env.TURNSTILE_SECRET) {
+      const ok = await verifyTurnstile(payload?.turnstileToken, ip, env.TURNSTILE_SECRET);
+      if (!ok) return json({ error: "Verification failed" }, 403, cors);
     }
 
     const question = String(payload?.question || "").slice(0, 500).trim();

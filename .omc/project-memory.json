@@ -152,14 +152,20 @@
   "hotPaths": [
     {
       "path": "src/styles/global.css",
-      "accessCount": 9,
-      "lastAccessed": 1780435107206,
+      "accessCount": 10,
+      "lastAccessed": 1780442794283,
       "type": "file"
     },
     {
       "path": "src/consts.ts",
-      "accessCount": 6,
-      "lastAccessed": 1780434987733,
+      "accessCount": 7,
+      "lastAccessed": 1780443679572,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ChatWidget.astro",
+      "accessCount": 7,
+      "lastAccessed": 1780443776204,
       "type": "file"
     },
     {
@@ -181,6 +187,12 @@
       "type": "file"
     },
     {
+      "path": "WRITING.md",
+      "accessCount": 3,
+      "lastAccessed": 1780435640630,
+      "type": "file"
+    },
+    {
       "path": "scripts/migrate-posts.mjs",
       "accessCount": 2,
       "lastAccessed": 1780397524119,
@@ -196,6 +208,24 @@
       "path": "src/components/Sidebar.astro",
       "accessCount": 2,
       "lastAccessed": 1780400186107,
+      "type": "file"
+    },
+    {
+      "path": "worker/src/index.js",
+      "accessCount": 2,
+      "lastAccessed": 1780443638868,
+      "type": "file"
+    },
+    {
+      "path": "worker/wrangler.toml",
+      "accessCount": 2,
+      "lastAccessed": 1780443661231,
+      "type": "file"
+    },
+    {
+      "path": "worker/README.md",
+      "accessCount": 2,
+      "lastAccessed": 1780443792537,
       "type": "file"
     },
     {
@@ -307,12 +337,6 @@
       "type": "file"
     },
     {
-      "path": "WRITING.md",
-      "accessCount": 1,
-      "lastAccessed": 1780397834409,
-      "type": "file"
-    },
-    {
       "path": "home-dark.png",
       "accessCount": 1,
       "lastAccessed": 1780397928703,
@@ -385,33 +409,9 @@
       "type": "file"
     },
     {
-      "path": "src/components/ChatWidget.astro",
-      "accessCount": 1,
-      "lastAccessed": 1780435030518,
-      "type": "file"
-    },
-    {
-      "path": "worker/wrangler.toml",
-      "accessCount": 1,
-      "lastAccessed": 1780435126374,
-      "type": "file"
-    },
-    {
-      "path": "worker/src/index.js",
-      "accessCount": 1,
-      "lastAccessed": 1780435144273,
-      "type": "file"
-    },
-    {
       "path": "worker/package.json",
       "accessCount": 1,
       "lastAccessed": 1780435153306,
-      "type": "file"
-    },
-    {
-      "path": "worker/README.md",
-      "accessCount": 1,
-      "lastAccessed": 1780435168642,
       "type": "file"
     },
     {

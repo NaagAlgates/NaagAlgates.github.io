@@ -41,10 +41,37 @@ the most relevant posts (retrieval-only mode).
   domain changes.
 - `MODEL` — any Workers AI text model (default `@cf/meta/llama-3.1-8b-instruct`).
 
+## Abuse protection
+
+`CHAT_API_URL` is public (it must be — the browser calls it). No API key is ever
+exposed; Workers AI is accessed via a server-side binding. The endpoint is
+protected in three layers, **each optional and only active when configured**:
+
+1. **Origin allow-list** — always on. Set `ALLOWED_ORIGINS` in `wrangler.toml`.
+   Blocks other sites' browsers and naive callers.
+2. **Per-IP rate limit** — on if the `RATE_LIMITER` binding deploys (it's in
+   `wrangler.toml`: 15 requests / 60s per IP). If `wrangler deploy` errors on the
+   `[[unsafe.bindings]]` block, comment it out — rate-limiting is then skipped and
+   the other layers still apply.
+3. **Cloudflare Turnstile** (free CAPTCHA) — on if the `TURNSTILE_SECRET` is set.
+   Setup:
+   - Cloudflare dashboard → **Turnstile** → add a widget for `nagaraj.com.au`.
+   - Put the **site key** (public) in `src/consts.ts`:
+     ```ts
+     export const TURNSTILE_SITE_KEY = "0x4AAA...";
+     ```
+   - Put the **secret key** on the Worker (never in code):
+     ```bash
+     cd worker && npx wrangler secret put TURNSTILE_SECRET
+     ```
+   - Redeploy the Worker. The widget will now require a Turnstile token, and the
+     Worker verifies it before calling the model.
+
+   Leave `TURNSTILE_SITE_KEY` empty to skip Turnstile entirely.
+
 ## Notes
 
-- Cost: Workers AI free tier (Neurons/day). Low-traffic blogs stay free.
+- Cost: Workers AI free tier (Neurons/day). Low-traffic blogs stay free; if the
+  cap is hit the chat pauses until reset — no surprise bill.
 - The Worker only answers from the excerpts the site sends + the author bio, so
   it won't fabricate beyond the blog. The bio lives in `src/index.js`.
-- To rate-limit or add abuse protection later, front it with Cloudflare WAF /
-  Rate Limiting rules, or add a Turnstile check.

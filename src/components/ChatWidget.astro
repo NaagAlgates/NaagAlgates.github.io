@@ -1,8 +1,8 @@
 ---
-import { CHAT_API_URL } from "../consts";
+import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
 ---
 
-<div class="chat" data-chat data-api={CHAT_API_URL}>
+<div class="chat" data-chat data-api={CHAT_API_URL} data-turnstile={TURNSTILE_SITE_KEY}>
   <button class="chat-fab" type="button" data-chat-open aria-label="Ask about the blog" title="Ask about the blog">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"></path>
@@ -37,6 +37,7 @@ import { CHAT_API_URL } from "../consts";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>
       </button>
     </form>
+    <div class="cf-turnstile-host" data-turnstile-host></div>
     <p class="chat-foot mono">answers grounded in human-written posts · may be imperfect</p>
   </div>
 </div>
@@ -62,9 +63,59 @@ import { CHAT_API_URL } from "../consts";
     const form = root.querySelector<HTMLFormElement>("[data-chat-form]")!;
     const input = root.querySelector<HTMLInputElement>("[data-chat-input]")!;
 
+    const turnstileKey = (root.dataset.turnstile || "").trim();
+    const tsHost = root.querySelector<HTMLElement>("[data-turnstile-host]")!;
+    let tsWidgetId: string | null = null;
+    let tsResolve: ((t: string | null) => void) | null = null;
+
     let index: Post[] | null = null;
     let loading: Promise<Post[]> | null = null;
     let busy = false;
+
+    // --- Turnstile (only when a site key is configured) ---------------------
+    const loadTurnstile = (): Promise<void> => {
+      if (!turnstileKey || (window as any).turnstile) return Promise.resolve();
+      return new Promise((resolve) => {
+        const s = document.createElement("script");
+        s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        s.async = true;
+        s.defer = true;
+        s.onload = () => resolve();
+        s.onerror = () => resolve();
+        document.head.appendChild(s);
+      });
+    };
+
+    const getTurnstileToken = async (): Promise<string | null> => {
+      if (!turnstileKey) return null;
+      await loadTurnstile();
+      const ts = (window as any).turnstile;
+      if (!ts) return null;
+      if (tsWidgetId === null) {
+        tsWidgetId = ts.render(tsHost, {
+          sitekey: turnstileKey,
+          execution: "execute",
+          appearance: "interaction-only",
+          callback: (token: string) => { tsResolve?.(token); tsResolve = null; },
+          "error-callback": () => { tsResolve?.(null); tsResolve = null; },
+        });
+      }
+      return new Promise<string | null>((resolve) => {
+        tsResolve = resolve;
+        try {
+          ts.reset(tsWidgetId);
+          ts.execute(tsWidgetId);
+        } catch {
+          resolve(null);
+        }
+        setTimeout(() => {
+          if (tsResolve === resolve) {
+            tsResolve = null;
+            resolve(null);
+          }
+        }, 12000);
+      });
+    };
 
     const loadIndex = () => {
       if (index) return Promise.resolve(index);
@@ -113,7 +164,7 @@ import { CHAT_API_URL } from "../consts";
             .join("")}</div>`
         : "";
 
-    const rank = (q: string, posts: Post[]): Post[] => {
+    const rank = (q: string, posts: Post[]): { p: Post; score: number }[] => {
       const terms = q
         .toLowerCase()
         .split(/[^a-z0-9]+/)
@@ -135,8 +186,7 @@ import { CHAT_API_URL } from "../consts";
       return scored
         .filter((s) => s.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 4)
-        .map((s) => s.p);
+        .slice(0, 4);
     };
 
     const ask = async (q: string) => {
@@ -144,44 +194,57 @@ import { CHAT_API_URL } from "../consts";
       const typing = bubble("bot", `<span class="chat-typing"><i></i><i></i><i></i></span>`);
 
       const posts = await loadIndex();
-      const hits = rank(q, posts);
+      const ranked = rank(q, posts);
+      const hits = ranked.map((r) => r.p);
+      const best = ranked[0]?.score ?? 0;
+      const relevant = best >= 3; // below this, matches are just incidental
 
-      // Retrieval-only mode (no Worker configured yet)
+      // Retrieval-only mode (Worker not configured yet): no LLM and no author
+      // bio on the client, so only surface posts when the match is genuinely
+      // relevant — otherwise be honest instead of dumping unrelated posts.
       if (!api) {
         typing.remove();
-        if (hits.length) {
+        if (relevant) {
+          bubble("bot", `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`);
+        } else {
           bubble(
             "bot",
-            `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`,
+            `<p>The AI assistant isn't switched on for this site yet, so I can only point to posts — and I couldn't find a close match for that. Try a topic like <em>dart</em>, <em>flutter</em>, or <em>kotlin</em>, or <a href="/">browse all posts</a>.</p>`,
           );
-        } else {
-          bubble("bot", `<p>I couldn't find a matching post. Try a topic like “dart”, “kotlin”, or “flutter”.</p>`);
         }
         busy = false;
         return;
       }
 
-      // LLM mode via the Cloudflare Worker
+      // LLM mode via the Cloudflare Worker (answers bio + post questions).
       try {
+        let turnstileToken: string | null = null;
+        if (turnstileKey) {
+          turnstileToken = await getTurnstileToken();
+          if (!turnstileToken) {
+            typing.remove();
+            bubble("bot", `<p>Couldn't verify you're human. Please try again.</p>`);
+            busy = false;
+            return;
+          }
+        }
         const res = await fetch(api, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             question: q,
             contexts: hits.map((p) => ({ title: p.title, url: p.url, text: p.text })),
+            turnstileToken,
           }),
         });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         typing.remove();
         const answer = (data.answer || "").trim() || "Sorry, I don't have an answer for that.";
-        bubble("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${sourcesHtml(hits)}`);
+        bubble("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${relevant ? sourcesHtml(hits) : ""}`);
       } catch {
         typing.remove();
-        bubble(
-          "bot",
-          `<p>I couldn't reach the assistant right now, but these posts look relevant:</p>${sourcesHtml(hits)}`,
-        );
+        bubble("bot", `<p>I couldn't reach the assistant right now. Please try again in a moment.</p>`);
       }
       busy = false;
     };
