@@ -24,7 +24,7 @@ export const KEYWORDS =
 // Leave "" to run the widget in retrieval-only mode (it links to the most
 // relevant posts). Set this to your deployed Worker URL once it's live —
 // e.g. "https://nagaraj-chat.<your-subdomain>.workers.dev". See worker/README.md.
-export const CHAT_API_URL = "";
+export const CHAT_API_URL = "https://nagaraj-chat.naaglabs.workers.dev";
 
 // Optional Cloudflare Turnstile site key (PUBLIC — safe to expose). Leave "" to
 // disable. When set, the chat asks visitors to pass a Turnstile check and sends
