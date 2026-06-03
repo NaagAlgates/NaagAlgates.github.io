@@ -14,16 +14,17 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
       <div class="chat-title mono">
         <span class="chat-dot"></span> ask the blog
       </div>
-      <button class="chat-x" type="button" data-chat-close aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-      </button>
+      <div class="chat-actions">
+        <button class="chat-x" type="button" data-chat-clear aria-label="Clear conversation" title="Clear conversation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6"></path></svg>
+        </button>
+        <button class="chat-x" type="button" data-chat-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+        </button>
+      </div>
     </header>
 
-    <div class="chat-log" data-chat-log aria-live="polite">
-      <div class="chat-msg bot">
-        <p>Hi! Ask me anything about Nagaraj or the posts here — I'll answer from the blog and point you to the relevant writing.</p>
-      </div>
-    </div>
+    <div class="chat-log" data-chat-log aria-live="polite"></div>
 
     <form class="chat-form" data-chat-form>
       <input
@@ -51,14 +52,20 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
     description: string;
     text: string;
   };
+  type Msg = { who: "user" | "bot"; html: string };
 
   const STOP = new Set("a an the and or of to in is are for on with how what why when does do this that you your i my me about it".split(" "));
+  // Conversation persisted here; shared across tabs of the same origin.
+  const HKEY = "nag-chat-history-v1";
+  const GREETING =
+    "<p>Hi! Ask me anything about Nagaraj or the posts here — I'll answer from the blog and point you to the relevant writing.</p>";
 
   document.querySelectorAll<HTMLElement>("[data-chat]").forEach((root) => {
     const api = (root.dataset.api || "").trim();
     const fab = root.querySelector<HTMLButtonElement>("[data-chat-open]")!;
     const panel = root.querySelector<HTMLElement>("[data-chat-panel]")!;
     const closeBtn = root.querySelector<HTMLButtonElement>("[data-chat-close]")!;
+    const clearBtn = root.querySelector<HTMLButtonElement>("[data-chat-clear]")!;
     const log = root.querySelector<HTMLElement>("[data-chat-log]")!;
     const form = root.querySelector<HTMLFormElement>("[data-chat-form]")!;
     const input = root.querySelector<HTMLInputElement>("[data-chat-input]")!;
@@ -71,6 +78,48 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
     let index: Post[] | null = null;
     let loading: Promise<Post[]> | null = null;
     let busy = false;
+
+    // --- Persistence (localStorage + cross-tab sync) ------------------------
+    const loadHistory = (): Msg[] => {
+      try {
+        const v = JSON.parse(localStorage.getItem(HKEY) || "[]");
+        return Array.isArray(v) ? v : [];
+      } catch {
+        return [];
+      }
+    };
+    let history: Msg[] = loadHistory();
+    const saveHistory = () => {
+      try {
+        localStorage.setItem(HKEY, JSON.stringify(history.slice(-60)));
+      } catch {
+        /* storage full/blocked — ignore */
+      }
+    };
+
+    const appendBubble = (who: "user" | "bot", html: string) => {
+      const el = document.createElement("div");
+      el.className = `chat-msg ${who}`;
+      el.innerHTML = html;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+      return el;
+    };
+
+    // Re-render greeting + persisted history (used on load and cross-tab sync).
+    const renderAll = () => {
+      log.innerHTML = "";
+      appendBubble("bot", GREETING);
+      for (const m of history) appendBubble(m.who, m.html);
+      log.scrollTop = log.scrollHeight;
+    };
+
+    // A persisted message (survives refresh, syncs to other tabs).
+    const pushMessage = (who: "user" | "bot", html: string) => {
+      history.push({ who, html });
+      saveHistory();
+      appendBubble(who, html);
+    };
 
     // --- Turnstile (only when a site key is configured) ---------------------
     const loadTurnstile = (): Promise<void> => {
@@ -141,21 +190,25 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
 
     fab.addEventListener("click", () => (panel.hidden ? openPanel() : closePanel()));
     closeBtn.addEventListener("click", closePanel);
+    clearBtn.addEventListener("click", () => {
+      history = [];
+      saveHistory();
+      renderAll();
+    });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !panel.hidden) closePanel();
     });
 
+    // Another tab changed the conversation → re-sync this tab.
+    window.addEventListener("storage", (e) => {
+      if (e.key === HKEY) {
+        history = loadHistory();
+        renderAll();
+      }
+    });
+
     const esc = (s: string) =>
       s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
-
-    const bubble = (who: "user" | "bot", html: string) => {
-      const el = document.createElement("div");
-      el.className = `chat-msg ${who}`;
-      el.innerHTML = html;
-      log.appendChild(el);
-      log.scrollTop = log.scrollHeight;
-      return el;
-    };
 
     const sourcesHtml = (posts: Post[]) =>
       posts.length
@@ -191,7 +244,7 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
 
     const ask = async (q: string) => {
       busy = true;
-      const typing = bubble("bot", `<span class="chat-typing"><i></i><i></i><i></i></span>`);
+      const typing = appendBubble("bot", `<span class="chat-typing"><i></i><i></i><i></i></span>`);
 
       const posts = await loadIndex();
       const ranked = rank(q, posts);
@@ -205,9 +258,9 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
       if (!api) {
         typing.remove();
         if (relevant) {
-          bubble("bot", `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`);
+          pushMessage("bot", `<p>Here are the most relevant posts:</p>${sourcesHtml(hits)}`);
         } else {
-          bubble(
+          pushMessage(
             "bot",
             `<p>The AI assistant isn't switched on for this site yet, so I can only point to posts — and I couldn't find a close match for that. Try a topic like <em>dart</em>, <em>flutter</em>, or <em>kotlin</em>, or <a href="/">browse all posts</a>.</p>`,
           );
@@ -223,7 +276,7 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
           turnstileToken = await getTurnstileToken();
           if (!turnstileToken) {
             typing.remove();
-            bubble("bot", `<p>Couldn't verify you're human. Please try again.</p>`);
+            pushMessage("bot", `<p>Couldn't verify you're human. Please try again.</p>`);
             busy = false;
             return;
           }
@@ -241,10 +294,10 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
         const data = await res.json();
         typing.remove();
         const answer = (data.answer || "").trim() || "Sorry, I don't have an answer for that.";
-        bubble("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${relevant ? sourcesHtml(hits) : ""}`);
+        pushMessage("bot", `<p>${esc(answer).replace(/\n/g, "<br>")}</p>${relevant ? sourcesHtml(hits) : ""}`);
       } catch {
         typing.remove();
-        bubble("bot", `<p>I couldn't reach the assistant right now. Please try again in a moment.</p>`);
+        pushMessage("bot", `<p>I couldn't reach the assistant right now. Please try again in a moment.</p>`);
       }
       busy = false;
     };
@@ -253,9 +306,11 @@ import { CHAT_API_URL, TURNSTILE_SITE_KEY } from "../consts";
       e.preventDefault();
       const q = input.value.trim();
       if (!q || busy) return;
-      bubble("user", `<p>${esc(q)}</p>`);
+      pushMessage("user", `<p>${esc(q)}</p>`);
       input.value = "";
       ask(q);
     });
+
+    renderAll();
   });
 </script>

@@ -152,20 +152,20 @@
   "hotPaths": [
     {
       "path": "src/styles/global.css",
-      "accessCount": 10,
-      "lastAccessed": 1780442794283,
+      "accessCount": 11,
+      "lastAccessed": 1780450826317,
+      "type": "file"
+    },
+    {
+      "path": "src/components/ChatWidget.astro",
+      "accessCount": 9,
+      "lastAccessed": 1780450817204,
       "type": "file"
     },
     {
       "path": "src/consts.ts",
       "accessCount": 7,
       "lastAccessed": 1780443679572,
-      "type": "file"
-    },
-    {
-      "path": "src/components/ChatWidget.astro",
-      "accessCount": 7,
-      "lastAccessed": 1780443776204,
       "type": "file"
     },
     {
@@ -418,6 +418,12 @@
       "path": "chat-widget.png",
       "accessCount": 1,
       "lastAccessed": 1780435421934,
+      "type": "file"
+    },
+    {
+      "path": "chat-clear-btn.png",
+      "accessCount": 1,
+      "lastAccessed": 1780450985585,
       "type": "file"
     }
   ],
