@@ -22,21 +22,32 @@ function readJsonBody(req) {
   return new Promise((resolvePromise, reject) => {
     const chunks = [];
     let size = 0;
+    let overLimit = false;
     req.on("data", (chunk) => {
+      if (overLimit) return; // keep draining so the 413 response can be sent
       size += chunk.length;
       if (size > BODY_LIMIT) {
+        overLimit = true;
+        chunks.length = 0;
         reject(Object.assign(new Error("request body too large"), { code: "too_large" }));
-        req.destroy();
         return;
       }
       chunks.push(chunk);
     });
     req.on("end", () => {
+      if (overLimit) return;
+      let parsed;
       try {
-        resolvePromise(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       } catch {
         reject(Object.assign(new Error("invalid JSON body"), { code: "bad_json" }));
+        return;
       }
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        reject(Object.assign(new Error("body must be a JSON object"), { code: "bad_json" }));
+        return;
+      }
+      resolvePromise(parsed);
     });
     req.on("error", reject);
   });

@@ -11,6 +11,24 @@ const editor = new Editor({
   previewStyle: "vertical",
   usageStatistics: false,
 });
+// Dev-only page; exposing the instance makes the editor scriptable for
+// fidelity checks and debugging.
+window.__editor = editor;
+
+// Toast UI's WYSIWYG model has no image-title attribute, so editing in
+// WYSIWYG mode strips `![alt](url "title")` titles (verified empirically).
+// Markdown mode preserves them byte-exact. Warn instead of losing silently.
+const TITLED_IMAGE = /!\[[^\]]*\]\([^)\s]+\s+"[^"]*"\)/;
+editor.on("changeMode", (mode) => {
+  if (mode === "wysiwyg" && TITLED_IMAGE.test(editor.getMarkdown())) {
+    setStatus(
+      "err",
+      'Heads up: this draft has images with title text (![alt](url "title")). ' +
+        "Editing in WYSIWYG mode drops those titles — switch back to the " +
+        "Markdown tab to keep them.",
+    );
+  }
+});
 
 let postId = null;
 let rev = null;
@@ -21,6 +39,45 @@ function setStatus(kind, text) {
   statusEl.className = kind;
   statusEl.textContent = text;
 }
+
+// Saving a post adds a file to the content collection, which makes the dev
+// server broadcast a full page reload — so the draft session (including
+// postId/rev, without which the next save would be a duplicate-create
+// conflict) must survive reloads. sessionStorage is per-tab and dev-only.
+const SESSION_KEY = "blog-editor-draft";
+
+function persistSession() {
+  sessionStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({
+      postId,
+      rev,
+      title: document.getElementById("title").value,
+      description: document.getElementById("description").value,
+      tags: document.getElementById("tags").value,
+      body: editor.getMarkdown(),
+      savedAt: Date.now(),
+    }),
+  );
+}
+
+function restoreSession() {
+  const raw = sessionStorage.getItem(SESSION_KEY);
+  if (!raw) return;
+  try {
+    const s = JSON.parse(raw);
+    postId = s.postId ?? null;
+    rev = s.rev ?? null;
+    document.getElementById("title").value = s.title ?? "";
+    document.getElementById("description").value = s.description ?? "";
+    document.getElementById("tags").value = s.tags ?? "";
+    if (s.body) editor.setMarkdown(s.body);
+    if (postId) setStatus("ok", "Draft session restored — Save will update the same post.");
+  } catch {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+}
+restoreSession();
 
 saveBtn.addEventListener("click", async () => {
   saveBtn.disabled = true;
@@ -48,6 +105,7 @@ saveBtn.addEventListener("click", async () => {
     if (res.ok) {
       postId = data.postId;
       rev = data.rev;
+      persistSession();
       setStatus(
         "ok",
         `Saved ${data.path}\nPreview: ${location.origin}/blog/${data.slug}` +

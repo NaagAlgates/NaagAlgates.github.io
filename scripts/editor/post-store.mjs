@@ -56,10 +56,14 @@ export function validatePost(input) {
     throw new ValidationError(
       "title must contain at least one letter or digit (a-z, 0-9) so it can become a URL slug",
     );
+  // Keep the final path component (`.<slug>.md.tmp`) well under the common
+  // 255-byte filesystem limit.
+  if (slug.length > 200)
+    throw new ValidationError("title is too long (slug exceeds 200 characters)");
   if (!description) throw new ValidationError("description is required");
   if (!Array.isArray(tags) || tags.some((t) => typeof t !== "string"))
     throw new ValidationError("tags must be an array of strings");
-  tags = tags.map((t) => t.trim()).filter((t) => t.length > 0);
+  tags = tags.map((t) => t.trim());
   for (const tag of tags) {
     if (!slugify(tag))
       throw new ValidationError(
@@ -84,7 +88,8 @@ export function serializeFrontmatter({ title, description, pubDate, tags }) {
 }
 
 export function renderPostFile(meta, body) {
-  const trimmed = body.replace(/\s+$/, "");
+  // Body is preserved verbatim; only the final newline count is normalized.
+  const trimmed = body.replace(/\n+$/, "");
   return `${serializeFrontmatter(meta)}\n\n${trimmed}\n`;
 }
 

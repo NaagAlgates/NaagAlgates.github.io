@@ -35,8 +35,13 @@ Notes:
   changed on disk by something else, if a post with the same slug already
   exists, or after the dev server restarted — copy your text, reload, and
   continue in the file directly.
-- Saves are atomic: the site never sees a half-written post. If your machine
-  crashes mid-save, worst case is re-saving the draft.
+- Saves are atomic at the process level: an interrupted save never leaves a
+  half-written post — the previous complete version stays in place. Durability
+  across a hard OS crash or power loss is not guaranteed (no fsync); after one,
+  check the file and re-save from the editor or git if needed.
+- Images with title text (`![alt](url "title")`) are preserved when you write
+  them in the **Markdown tab**. The WYSIWYG view can't represent image titles
+  and drops them if you edit there — the editor warns you when that applies.
 - Publishing is unchanged: commit the file and push (see below).
 
 ## Frontmatter

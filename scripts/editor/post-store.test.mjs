@@ -183,14 +183,19 @@ test("pubDate stays stable across re-saves", async () => {
   assert.match(content, new RegExp(`pubDate: ${created.pubDate}\n`));
 });
 
-test("atomic visibility: target is always a complete old or new post", async () => {
+test("atomic visibility: target is always a complete old or new post, never absent", async () => {
   const dir = await makeDir();
   const allowed = new Set(); // exact byte-strings permitted to be visible
+  let targetMustExist = null; // during update, the target may never be absent
   const fsx = makeFsx({
     after: async () => {
       for (const f of await mdFiles(dir)) {
         const content = await fsp.readFile(join(dir, f), "utf8");
         assert.ok(allowed.has(content), `partial/unexpected content visible in ${f}`);
+      }
+      if (targetMustExist) {
+        const content = await fsp.readFile(targetMustExist, "utf8");
+        assert.ok(allowed.has(content), "update target absent or partial mid-save");
       }
     },
   });
@@ -205,6 +210,7 @@ test("atomic visibility: target is always a complete old or new post", async () 
   const body2 = "# Hello\n\nRewritten body.";
   const v2 = renderPostFile({ ...INPUT, pubDate }, body2);
   allowed.add(v2);
+  targetMustExist = created.path; // never-absent invariant, checked at every op
   await store.save({ input: { ...INPUT, body: body2 }, mode: "update", postId: created.postId, rev: created.rev });
   assert.equal(await fsp.readFile(created.path, "utf8"), v2);
 });
@@ -251,12 +257,49 @@ test("interruption at each boundary leaves a complete post and recoverable state
 
   await failAt("open", 1, "create"); // open(tmp) — wx
   await failAt("fh.writeFile", 1, "create");
+  await failAt("fh.stat", 1, "create"); // stat(tmp) before link
   await failAt("link", 1, "create");
   await failAt("open", 1, "update"); // open(target)
-  await failAt("fh.readFile", 1, "update");
+  await failAt("fh.stat", 1, "update"); // fstat(target) identity check
+  await failAt("fh.readFile", 1, "update"); // hash(target) freshness check
   await failAt("open", 2, "update"); // open(tmp)
   await failAt("fh.writeFile", 1, "update");
+  await failAt("fh.stat", 2, "update"); // fstat(tmp) pre-publish
   await failAt("rename", 1, "update");
+  // After a successful rename only a synchronous in-memory registry
+  // assignment remains (values pre-computed before publish, per plan D3) —
+  // there is no fs operation left to interrupt. A cleanup-unlink failure
+  // after create's link must NOT fail the save:
+  {
+    const dir = await makeDir();
+    let fault = false;
+    const fsx = makeFsx({
+      before: (op, p) => {
+        if (fault && op === "unlink" && p.endsWith(".tmp")) throw new Error("injected unlink failure");
+      },
+    });
+    const store = new PostStore({ dir, fsx });
+    fault = true;
+    const res = await store.save({ input: INPUT, mode: "create" });
+    assert.ok(res.rev, "create must succeed even if temp cleanup fails");
+    assert.deepEqual(await mdFiles(dir), [`${res.slug}.md`]);
+  }
+});
+
+test("concurrency: mixed create/update interleavings serialize safely", async () => {
+  const dir = await makeDir();
+  const store = new PostStore({ dir });
+  const first = await store.save({ input: INPUT, mode: "create" });
+  const other = { ...INPUT, title: "Another Post Entirely" };
+  const results = await Promise.allSettled([
+    store.save({ input: { ...INPUT, body: "u1" }, mode: "update", postId: first.postId, rev: first.rev }),
+    store.save({ input: other, mode: "create" }),
+    store.save({ input: { ...INPUT, body: "u2" }, mode: "update", postId: first.postId, rev: first.rev }),
+  ]);
+  // The unrelated create always succeeds; exactly one same-rev update wins.
+  assert.equal(results[1].status, "fulfilled");
+  assert.deepEqual([results[0].status, results[2].status].sort(), ["fulfilled", "rejected"]);
+  assert.deepEqual((await mdFiles(dir)).sort(), ["another-post-entirely.md", "my-test-post.md"]);
 });
 
 test("concurrency: parallel creates and same-rev updates serialize; one winner", async () => {
@@ -279,7 +322,9 @@ test("concurrency: parallel creates and same-rev updates serialize; one winner",
   assert.ok(loser.reason instanceof ConflictError);
 });
 
-test("YAML: adversarial scalars round-trip exactly", async () => {
+test("YAML: adversarial scalars round-trip through Astro's actual parser", async () => {
+  // js-yaml is the frontmatter parser Astro itself depends on.
+  const { load } = await import("js-yaml");
   const dir = await makeDir();
   const store = new PostStore({ dir });
   const nasty = {
@@ -290,15 +335,32 @@ test("YAML: adversarial scalars round-trip exactly", async () => {
   };
   const res = await store.save({ input: nasty, mode: "create" });
   const content = await fsp.readFile(res.path, "utf8");
-  const lines = content.split("\n");
-  assert.equal(lines[0], "---");
-  assert.equal(JSON.parse(lines[1].slice("title: ".length)), nasty.title);
-  assert.equal(JSON.parse(lines[2].slice("description: ".length)), nasty.description);
-  assert.match(lines[3], /^pubDate: \d{4}-\d{2}-\d{2}$/);
-  assert.deepEqual(JSON.parse(lines[4].slice("tags: ".length)), nasty.tags);
-  assert.equal(lines[5], "---");
-  // frontmatter fence is not broken early by embedded '---'
-  assert.equal(lines.slice(1, 5).filter((l) => l === "---").length, 0);
+  // Extract the frontmatter block exactly the way a frontmatter splitter
+  // does: first fence line to the next fence line.
+  const m = content.match(/^---\n([\s\S]*?)\n---\n/);
+  assert.ok(m, "frontmatter fences not found or broken by embedded ---");
+  const parsed = load(m[1]);
+  assert.equal(parsed.title, nasty.title);
+  assert.equal(parsed.description, nasty.description);
+  assert.deepEqual(parsed.tags, nasty.tags);
+  const dateStr = parsed.pubDate instanceof Date
+    ? parsed.pubDate.toISOString().slice(0, 10)
+    : String(parsed.pubDate);
+  assert.match(dateStr, /^\d{4}-\d{2}-\d{2}$/);
+  // body preserved after the fence
+  assert.equal(content.slice(m[0].length), "\nBody with --- and #.\n");
+});
+
+test("validation: empty-string tags and over-long slugs are rejected", async () => {
+  const store = new PostStore({ dir: await makeDir() });
+  await assert.rejects(
+    store.save({ input: { ...INPUT, tags: ["tech", ""] }, mode: "create" }),
+    ValidationError,
+  );
+  await assert.rejects(
+    store.save({ input: { ...INPUT, title: "x".repeat(250) }, mode: "create" }),
+    ValidationError,
+  );
 });
 
 test("serializeFrontmatter emits the established shape", () => {
