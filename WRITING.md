@@ -12,6 +12,33 @@ npm run new "My Post Title"
 This creates `src/content/blog/my-post-title.md` with frontmatter pre-filled.
 The filename becomes the URL: `https://www.nagaraj.com.au/blog/my-post-title`.
 
+## Visual editor (local only)
+
+Prefer writing in a rich-text editor? Run the dev server and open the local
+editor:
+
+```bash
+npm run dev      # then visit http://localhost:4321/_editor
+```
+
+Fill in the title, description, and tags, write the post in the WYSIWYG editor
+(it also has a markdown tab), and hit **Save post**. That writes a normal
+markdown file into `src/content/blog/` — same format as `npm run new` — and
+the post is instantly previewable at `http://localhost:4321/blog/<slug>`.
+Re-saving updates your draft; the filename/URL is fixed by the first save.
+
+Notes:
+
+- The editor exists **only** in the local dev server. It is never built or
+  deployed — the live site has no `/_editor` route.
+- Saving is refused (with your work kept in the editor) if the file was
+  changed on disk by something else, if a post with the same slug already
+  exists, or after the dev server restarted — copy your text, reload, and
+  continue in the file directly.
+- Saves are atomic: the site never sees a half-written post. If your machine
+  crashes mid-save, worst case is re-saving the draft.
+- Publishing is unchanged: commit the file and push (see below).
+
 ## Frontmatter
 
 ```markdown

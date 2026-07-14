@@ -1,0 +1,208 @@
+// Endpoint-contract tests: the REAL middleware on a real node:http server,
+// exercised over actual HTTP (the Astro integration only wires this same
+// middleware into the dev server).
+import test from "node:test";
+import assert from "node:assert/strict";
+import http from "node:http";
+import fsp from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createEditorMiddleware } from "./middleware.mjs";
+
+async function bootServer() {
+  const blogDir = await fsp.mkdtemp(join(tmpdir(), "blog-editor-http-"));
+  let server;
+  const middleware = createEditorMiddleware({
+    blogDir,
+    getBoundPort: () => server.address()?.port,
+    clientSrc: "/@fs/test/client.mjs",
+  });
+  server = http.createServer((req, res) => {
+    // Test hook: present a stubbed remoteAddress through the real socket
+    // property, so the middleware's own socket check is what's exercised.
+    const fake = req.headers["x-test-remote-address"];
+    if (fake) Object.defineProperty(req.socket, "remoteAddress", { value: fake, configurable: true });
+    middleware(req, res, () => {
+      res.statusCode = 404;
+      res.end("fallthrough");
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const port = server.address().port;
+  return { server, port, blogDir };
+}
+
+function request(port, { method = "GET", path = "/_editor", headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: "127.0.0.1", port, method, path, headers }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () =>
+        resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") }),
+      );
+    });
+    req.on("error", reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+const goodPostHeaders = (port) => ({
+  host: `localhost:${port}`,
+  origin: `http://localhost:${port}`,
+  "x-blog-editor": "1",
+  "content-type": "application/json",
+});
+
+const POST_INPUT = {
+  mode: "create",
+  title: "Endpoint Test Post",
+  description: "Desc.",
+  tags: ["tech"],
+  body: "# Hi\n\nBody.",
+};
+
+test("endpoint: full save lifecycle over HTTP", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+
+  // create
+  const created = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port), body: JSON.stringify(POST_INPUT),
+  });
+  assert.equal(created.status, 200, created.body);
+  const c = JSON.parse(created.body);
+  assert.ok(c.postId && c.rev && c.slug === "endpoint-test-post");
+  const onDisk = await fsp.readFile(join(blogDir, "endpoint-test-post.md"), "utf8");
+  assert.match(onDisk, /^---\ntitle: "Endpoint Test Post"\n/);
+
+  // re-save with postId+rev
+  const updated = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ ...POST_INPUT, mode: "update", postId: c.postId, rev: c.rev, body: "# Hi\n\nEdited." }),
+  });
+  assert.equal(updated.status, 200, updated.body);
+  const u = JSON.parse(updated.body);
+
+  // stale rev -> 409
+  const stale = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ ...POST_INPUT, mode: "update", postId: c.postId, rev: c.rev }),
+  });
+  assert.equal(stale.status, 409);
+
+  // unknown postId -> 409
+  const unknown = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ ...POST_INPUT, mode: "update", postId: "nope", rev: u.rev }),
+  });
+  assert.equal(unknown.status, 409);
+
+  // duplicate create -> 409
+  const dup = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port), body: JSON.stringify(POST_INPUT),
+  });
+  assert.equal(dup.status, 409);
+
+  // invalid input -> 400
+  const invalid = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port), body: JSON.stringify({ ...POST_INPUT, title: "!!!" }),
+  });
+  assert.equal(invalid.status, 400);
+});
+
+test("endpoint: 403 matrix", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const save = (headers) =>
+    request(port, { method: "POST", path: "/_editor/api/save", headers, body: JSON.stringify(POST_INPUT) });
+
+  // wrong Host authority
+  assert.equal((await save({ ...goodPostHeaders(port), host: "evil.example:80" })).status, 403);
+  // Host with a port other than the actually bound one
+  assert.equal((await save({ ...goodPostHeaders(port), host: `localhost:${port + 1}` })).status, 403);
+  // missing Origin
+  const noOrigin = { ...goodPostHeaders(port) };
+  delete noOrigin.origin;
+  assert.equal((await save(noOrigin)).status, 403);
+  // foreign Origin
+  assert.equal((await save({ ...goodPostHeaders(port), origin: "http://evil.example" })).status, 403);
+  // missing custom header
+  const noHeader = { ...goodPostHeaders(port) };
+  delete noHeader["x-blog-editor"];
+  assert.equal((await save(noHeader)).status, 403);
+  // GET with bad Host is also refused
+  assert.equal((await request(port, { path: "/_editor", headers: { host: "evil.example:80" } })).status, 403);
+});
+
+test("endpoint: non-loopback socket address is refused by the real middleware", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const res = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: { ...goodPostHeaders(port), "x-test-remote-address": "192.168.1.50" },
+    body: JSON.stringify(POST_INPUT),
+  });
+  assert.equal(res.status, 403);
+  assert.match(res.body, /loopback/);
+});
+
+test("endpoint: no CORS headers anywhere, preflight cannot succeed", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const preflight = await request(port, {
+    method: "OPTIONS", path: "/_editor/api/save",
+    headers: {
+      host: `localhost:${port}`,
+      origin: "http://evil.example",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "x-blog-editor",
+    },
+  });
+  const responses = [
+    preflight,
+    await request(port, { path: "/_editor", headers: { host: `localhost:${port}` } }),
+    await request(port, {
+      method: "POST", path: "/_editor/api/save",
+      headers: goodPostHeaders(port), body: JSON.stringify(POST_INPUT),
+    }),
+  ];
+  for (const res of responses) {
+    for (const h of Object.keys(res.headers)) {
+      assert.ok(!h.startsWith("access-control-"), `unexpected CORS header ${h}`);
+    }
+  }
+});
+
+test("endpoint: body over 2MB is rejected", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const big = JSON.stringify({ ...POST_INPUT, body: "x".repeat(2 * 1024 * 1024 + 1024) });
+  const res = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port), body: big,
+  }).catch((err) => ({ status: "socket-destroyed", err }));
+  // Middleware destroys the connection after replying 413; either observing
+  // the 413 or the destroyed socket is a correct refusal.
+  assert.ok(res.status === 413 || res.status === "socket-destroyed", String(res.status));
+});
+
+test("endpoint: editor page is served and loads the client module", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const page = await request(port, { path: "/_editor", headers: { host: `localhost:${port}` } });
+  assert.equal(page.status, 200);
+  assert.match(page.body, /<script type="module" src="\/@fs\/test\/client\.mjs">/);
+  // anything else under /_editor is not found, not a traversal surface
+  const other = await request(port, {
+    path: "/_editor/../package.json",
+    headers: { host: `localhost:${port}` },
+  });
+  assert.notEqual(other.status, 200);
+});
