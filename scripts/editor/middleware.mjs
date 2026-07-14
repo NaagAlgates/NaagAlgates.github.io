@@ -72,7 +72,7 @@ export function createEditorMiddleware({ blogDir, getBoundPort, clientSrc, store
       remoteAddress: req.socket?.remoteAddress,
       host: req.headers.host,
       origin: req.headers.origin,
-      hasEditorHeader: req.headers[EDITOR_HEADER] !== undefined,
+      editorHeader: req.headers[EDITOR_HEADER],
       boundPort: getBoundPort(),
     });
     // No CORS headers are emitted anywhere in this middleware (including for

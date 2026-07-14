@@ -51,7 +51,7 @@ test("checkRequest: full policy", () => {
     remoteAddress: "127.0.0.1",
     host: "localhost:4321",
     origin: undefined,
-    hasEditorHeader: false,
+    editorHeader: undefined,
     boundPort: 4321,
   };
   assert.ok(checkRequest(base).allowed);
@@ -65,11 +65,14 @@ test("checkRequest: full policy", () => {
   // unknown bound port -> refuse
   assert.equal(checkRequest({ ...base, boundPort: undefined }).status, 403);
 
-  const post = { ...base, method: "POST", origin: "http://localhost:4321", hasEditorHeader: true };
+  const post = { ...base, method: "POST", origin: "http://localhost:4321", editorHeader: "1" };
   assert.ok(checkRequest(post).allowed);
   // Origin is mandatory on POST
   assert.equal(checkRequest({ ...post, origin: undefined }).status, 403);
   assert.equal(checkRequest({ ...post, origin: "http://evil.example" }).status, 403);
-  // custom header is mandatory on POST
-  assert.equal(checkRequest({ ...post, hasEditorHeader: false }).status, 403);
+  // custom header must have the exact agreed value on POST
+  assert.equal(checkRequest({ ...post, editorHeader: undefined }).status, 403);
+  assert.equal(checkRequest({ ...post, editorHeader: "" }).status, 403);
+  assert.equal(checkRequest({ ...post, editorHeader: "0" }).status, 403);
+  assert.equal(checkRequest({ ...post, editorHeader: "true" }).status, 403);
 });

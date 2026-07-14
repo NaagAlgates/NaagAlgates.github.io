@@ -6,12 +6,13 @@
 //   2. Host header authority must be a loopback name with the server's
 //      actually bound port (covers DNS rebinding).
 //   3. POST additionally requires a loopback Origin (mandatory) and the
-//      custom X-Blog-Editor header (forces a CORS preflight cross-origin,
+//      custom X-Blog-Editor: 1 header (forces a CORS preflight cross-origin,
 //      which can never succeed because no CORS headers are ever emitted).
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export const EDITOR_HEADER = "x-blog-editor";
+export const EDITOR_HEADER_VALUE = "1";
 
 export function isLoopbackAddress(addr) {
   if (typeof addr !== "string" || addr.length === 0) return false;
@@ -57,7 +58,7 @@ export function isAllowedOrigin(origin, boundPort) {
  * @param {string|undefined} meta.remoteAddress
  * @param {string|undefined} meta.host        Host header
  * @param {string|undefined} meta.origin      Origin header
- * @param {boolean} meta.hasEditorHeader
+ * @param {string|string[]|undefined} meta.editorHeader X-Blog-Editor value
  * @param {number|undefined} meta.boundPort   actual bound port of the server
  * @returns {{allowed: boolean, status?: number, reason?: string}}
  */
@@ -74,8 +75,8 @@ export function checkRequest(meta) {
   if (meta.method === "POST") {
     if (!isAllowedOrigin(meta.origin, meta.boundPort))
       return deny("Origin header missing or not this server's loopback origin");
-    if (!meta.hasEditorHeader)
-      return deny(`missing ${EDITOR_HEADER} header`);
+    if (meta.editorHeader !== EDITOR_HEADER_VALUE)
+      return deny(`${EDITOR_HEADER} header must be ${EDITOR_HEADER_VALUE}`);
   }
 
   return { allowed: true };

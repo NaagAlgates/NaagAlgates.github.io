@@ -10,12 +10,16 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 
 export function hasTitledImage(markdown) {
   let found = false;
+  const imageReferenceIds = new Set();
+  const titledDefinitionIds = new Set();
   const walk = (node) => {
-    if (!node || found) return;
+    if (!node) return;
     if (node.type === "image" && node.title != null && node.title !== "") {
       found = true;
-      return;
     }
+    if (node.type === "imageReference") imageReferenceIds.add(node.identifier);
+    if (node.type === "definition" && node.title != null && node.title !== "")
+      titledDefinitionIds.add(node.identifier);
     if (node.children) for (const child of node.children) walk(child);
   };
   try {
@@ -23,5 +27,5 @@ export function hasTitledImage(markdown) {
   } catch {
     return false; // unparseable input has nothing to protect
   }
-  return found;
+  return found || [...imageReferenceIds].some((id) => titledDefinitionIds.has(id));
 }

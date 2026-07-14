@@ -141,6 +141,9 @@ test("endpoint: 403 matrix", async (t) => {
   const noHeader = { ...goodPostHeaders(port) };
   delete noHeader["x-blog-editor"];
   assert.equal((await save(noHeader)).status, 403);
+  // wrong custom-header values are also refused
+  assert.equal((await save({ ...goodPostHeaders(port), "x-blog-editor": "0" })).status, 403);
+  assert.equal((await save({ ...goodPostHeaders(port), "x-blog-editor": "true" })).status, 403);
   // GET with bad Host is also refused
   assert.equal((await request(port, { path: "/_editor", headers: { host: "evil.example:80" } })).status, 403);
 });

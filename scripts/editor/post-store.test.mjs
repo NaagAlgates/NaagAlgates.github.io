@@ -405,6 +405,10 @@ test("hasTitledImage: exact CommonMark semantics, including escaped forms", asyn
     '![a\\]b](u.png "title")', // escaped bracket in alt
     "![alt](u.png (a\\)b))", // escaped paren in title
     'text before ![a](u.png "t") after',
+    '![alt][img]\n\n[img]: /image.png "title"',
+    "![alt][]\n\n[alt]: /image.png 'title'", // collapsed reference
+    "![alt]\n\n[alt]: /image.png (title)", // shortcut reference
+    '![alt][Spaced Label]\n\n[spaced   label]: /image.png "title"', // normalized identifier
   ];
   const negative = [
     "![alt](https://e.com/i.png)",
@@ -413,6 +417,9 @@ test("hasTitledImage: exact CommonMark semantics, including escaped forms", asyn
     'plain text with "quotes" and (parens)',
     '`![alt](u.png "t")` in inline code is not an image',
     '```\n![alt](u.png "t")\n```\nfenced code is not an image',
+    "![alt][img]\n\n[img]: /image.png", // referenced definition has no title
+    '[link][img]\n\n[img]: /image.png "title"', // titled definition is not used by an image
+    '[img]: /image.png "title"', // unreferenced titled definition
   ];
   for (const s of positive) assert.ok(hasTitledImage(s), `should detect: ${s}`);
   for (const s of negative) assert.ok(!hasTitledImage(s), `should not detect: ${s}`);
