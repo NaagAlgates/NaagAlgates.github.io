@@ -3,7 +3,7 @@
 // prosemirror dependencies from node_modules — no CDN, dev only.
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
-import { TITLED_IMAGE } from "./markdown-flags.mjs";
+import { hasTitledImage } from "./markdown-flags.mjs";
 
 const editor = new Editor({
   el: document.querySelector("#editor"),
@@ -27,13 +27,12 @@ editor.on("change", () => {
   if (editor.isMarkdownMode()) mdSnapshot = editor.getMarkdown();
 });
 editor.on("changeMode", (mode) => {
-  if (mode !== "wysiwyg" || !TITLED_IMAGE.test(mdSnapshot)) return;
+  if (mode !== "wysiwyg" || !hasTitledImage(mdSnapshot)) return;
   if (Date.now() < lossyOverrideUntil) {
     setStatus(
       "err",
       "Switched to WYSIWYG — the image titles in this draft were dropped " +
-        "(protection overridden). The Markdown tab still had them at: \n" +
-        mdSnapshot.match(TITLED_IMAGE)[0],
+        "(protection overridden).",
     );
     return;
   }
@@ -97,7 +96,7 @@ function restoreSession() {
     if (s.body) {
       // Restoring into the WYSIWYG model would strip image titles; restore
       // titled-image drafts in markdown mode so restore is never lossy.
-      if (TITLED_IMAGE.test(s.body)) editor.changeMode("markdown", true);
+      if (hasTitledImage(s.body)) editor.changeMode("markdown", true);
       editor.setMarkdown(s.body);
       mdSnapshot = s.body;
     }

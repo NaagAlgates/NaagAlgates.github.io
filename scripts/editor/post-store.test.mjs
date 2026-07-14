@@ -363,30 +363,38 @@ test("validation: empty-string tags and over-long slugs are rejected", async () 
   );
 });
 
-test("lastSave is queryable the instant the post becomes visible, and rolls back on failed create", async () => {
+test("getLastSave serializes behind in-flight saves — no phantom, no missing state", async () => {
   const dir = await makeDir();
-  let store;
-  let lastSaveAtLink = null;
-  const fsx = makeFsx({
-    before: (op) => {
-      if (op === "link") lastSaveAtLink = store.lastSave; // moment of visibility
-    },
-  });
-  store = new PostStore({ dir, fsx });
-  const created = await store.save({ input: INPUT, mode: "create" });
-  // A reload triggered by the link() publish must find lastSave already set.
-  assert.ok(lastSaveAtLink, "lastSave was not set before the publish");
-  assert.equal(lastSaveAtLink.postId, created.postId);
-  assert.equal(lastSaveAtLink.rev, created.rev);
+  const store = new PostStore({ dir });
 
-  // Failed duplicate create must not clobber lastSave (rollback).
-  await assert.rejects(store.save({ input: INPUT, mode: "create" }), ConflictError);
-  assert.equal(store.lastSave.postId, created.postId);
-  assert.equal(store.lastSave.rev, created.rev);
+  // Read issued WHILE a create is in flight resolves to that create's result.
+  const saving = store.save({ input: INPUT, mode: "create" });
+  const reading = store.getLastSave();
+  const [created, observed] = await Promise.all([saving, reading]);
+  assert.equal(observed.postId, created.postId);
+  assert.equal(observed.rev, created.rev);
+
+  // Read issued while a FAILING create is in flight never sees a phantom:
+  // it resolves to the previous successful save.
+  const failing = store.save({ input: INPUT, mode: "create" }); // duplicate slug
+  const reading2 = store.getLastSave();
+  await assert.rejects(failing, ConflictError);
+  const observed2 = await reading2;
+  assert.equal(observed2.postId, created.postId);
+  assert.equal(observed2.rev, created.rev);
+
+  // A store with no successful save yet (failing create only) reports null.
+  const dir3 = await makeDir();
+  await fsp.writeFile(join(dir3, "my-test-post.md"), "existing\n");
+  const store3 = new PostStore({ dir: dir3 });
+  const failing3 = store3.save({ input: INPUT, mode: "create" });
+  const reading3 = store3.getLastSave();
+  await assert.rejects(failing3, ConflictError);
+  assert.equal(await reading3, null);
 });
 
-test("TITLED_IMAGE covers CommonMark title/destination variants", async () => {
-  const { TITLED_IMAGE } = await import("./markdown-flags.mjs");
+test("hasTitledImage: exact CommonMark semantics, including escaped forms", async () => {
+  const { hasTitledImage } = await import("./markdown-flags.mjs");
   const positive = [
     '![alt](https://e.com/i.png "title")',
     "![alt](https://e.com/i.png 'title')",
@@ -394,18 +402,20 @@ test("TITLED_IMAGE covers CommonMark title/destination variants", async () => {
     '![alt](<https://e.com/my image.png> "title")',
     '![alt](https://e.com/i_(1).png "title")', // balanced parens in dest
     '![alt](i.png "he said \\"hi\\"")', // escaped quotes in title
+    '![a\\]b](u.png "title")', // escaped bracket in alt
+    "![alt](u.png (a\\)b))", // escaped paren in title
     'text before ![a](u.png "t") after',
   ];
   const negative = [
     "![alt](https://e.com/i.png)",
     "![alt](<https://e.com/my image.png>)",
-    "[not an image](u.png \"t\")",
-    "plain text with \"quotes\" and (parens)",
+    '[not an image](u.png "t")',
+    'plain text with "quotes" and (parens)',
+    '`![alt](u.png "t")` in inline code is not an image',
+    '```\n![alt](u.png "t")\n```\nfenced code is not an image',
   ];
-  // (A titled image inside inline code still matches — an acceptable false
-  // positive: the protection only ever blocks a mode switch, never data.)
-  for (const s of positive) assert.ok(TITLED_IMAGE.test(s), `should match: ${s}`);
-  for (const s of negative) assert.ok(!TITLED_IMAGE.test(s), `should not match: ${s}`);
+  for (const s of positive) assert.ok(hasTitledImage(s), `should detect: ${s}`);
+  for (const s of negative) assert.ok(!hasTitledImage(s), `should not detect: ${s}`);
 });
 
 test("serializeFrontmatter emits the established shape", () => {

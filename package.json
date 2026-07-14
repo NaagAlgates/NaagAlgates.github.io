@@ -18,6 +18,7 @@
     "astro": "^5.2.5"
   },
   "devDependencies": {
-    "@toast-ui/editor": "^3.2.2"
+    "@toast-ui/editor": "^3.2.2",
+    "mdast-util-from-markdown": "^2.0.3"
   }
 }

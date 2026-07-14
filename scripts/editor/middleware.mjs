@@ -87,7 +87,8 @@ export function createEditorMiddleware({ blogDir, getBoundPort, clientSrc, store
     // Session recovery: the post-save page reload can beat the save response
     // to the client; this lets a restored session re-adopt ownership.
     if (req.method === "GET" && url === "/_editor/api/last-save") {
-      const last = postStore.lastSave;
+      // Serialized behind any in-flight save — never observes mid-save state.
+      const last = await postStore.getLastSave();
       if (!last) return sendJson(res, 404, { error: "no save in this server run" });
       return sendJson(res, 200, last);
     }
