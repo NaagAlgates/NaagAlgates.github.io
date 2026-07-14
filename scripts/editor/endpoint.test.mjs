@@ -237,6 +237,9 @@ test("endpoint: editor page is served and loads the client module", async (t) =>
   const page = await request(port, { path: "/_editor", headers: { host: `localhost:${port}` } });
   assert.equal(page.status, 200);
   assert.match(page.body, /<script type="module" src="\/@fs\/test\/client\.mjs">/);
+  // XSS defense-in-depth: the page must carry a script-restricting CSP.
+  assert.match(page.headers["content-security-policy"] ?? "", /script-src 'self'/);
+  assert.match(page.headers["content-security-policy"] ?? "", /object-src 'none'/);
   // anything else under /_editor is not found, not a traversal surface
   const other = await request(port, {
     path: "/_editor/../package.json",

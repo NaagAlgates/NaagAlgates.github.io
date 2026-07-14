@@ -81,8 +81,24 @@ export function createEditorMiddleware({ blogDir, getBoundPort, clientSrc, store
 
     if (req.method === "OPTIONS") return sendJson(res, 403, { error: "no cross-origin access" });
 
-    if (req.method === "GET" && (url === "/_editor" || url === "/_editor/"))
+    if (req.method === "GET" && (url === "/_editor" || url === "/_editor/")) {
+      // Defense in depth: even if a sanitizer bypass injects markup, no
+      // inline/foreign script can execute on the editor page.
+      res.setHeader(
+        "content-security-policy",
+        [
+          "default-src 'self'",
+          "script-src 'self'",
+          "connect-src 'self'",
+          "img-src 'self' data: https:",
+          "style-src 'self' 'unsafe-inline'",
+          "object-src 'none'",
+          "base-uri 'none'",
+          "frame-ancestors 'none'",
+        ].join("; "),
+      );
       return send(res, 200, "text/html; charset=utf-8", editorPageHtml({ clientSrc }));
+    }
 
     // Session recovery: the post-save page reload can beat the save response
     // to the client; this lets a restored session re-adopt ownership.

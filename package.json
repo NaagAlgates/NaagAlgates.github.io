@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@toast-ui/editor": "^3.2.2",
+    "dompurify": "^2.5.9",
     "mdast-util-from-markdown": "^2.0.3"
   }
 }

@@ -3,6 +3,7 @@
 // prosemirror dependencies from node_modules — no CDN, dev only.
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
+import DOMPurify from "dompurify";
 import { hasTitledImage } from "./markdown-flags.mjs";
 
 const editor = new Editor({
@@ -11,6 +12,10 @@ const editor = new Editor({
   initialEditType: "wysiwyg",
   previewStyle: "vertical",
   usageStatistics: false,
+  // Toast UI's dist bundle embeds DOMPurify 2.3.3, which has known mXSS /
+  // prototype-pollution bypasses. This hook makes Toast UI sanitize with the
+  // patched DOMPurify from node_modules instead of the embedded copy.
+  customHTMLSanitizer: (html) => DOMPurify.sanitize(html),
 });
 // Dev-only page; exposing the instance makes the editor scriptable for
 // fidelity checks and debugging.
