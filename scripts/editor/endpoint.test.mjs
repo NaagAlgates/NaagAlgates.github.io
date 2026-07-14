@@ -205,6 +205,29 @@ test("endpoint: JSON null body gets a 400, not a 500", async (t) => {
   assert.equal(res.status, 400);
 });
 
+test("endpoint: last-save recovery snapshot is gated and accurate", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const get = (headers) => request(port, { path: "/_editor/api/last-save", headers });
+
+  // same security gate as everything under /_editor
+  assert.equal((await get({ host: "evil.example:80" })).status, 403);
+  // no save yet in this server run
+  assert.equal((await get({ host: `localhost:${port}` })).status, 404);
+
+  const created = await request(port, {
+    method: "POST", path: "/_editor/api/save",
+    headers: goodPostHeaders(port), body: JSON.stringify(POST_INPUT),
+  });
+  const c = JSON.parse(created.body);
+  const last = await get({ host: `localhost:${port}` });
+  assert.equal(last.status, 200);
+  const l = JSON.parse(last.body);
+  assert.equal(l.postId, c.postId);
+  assert.equal(l.rev, c.rev);
+  assert.equal(l.slug, "endpoint-test-post");
+});
+
 test("endpoint: editor page is served and loads the client module", async (t) => {
   const { server, port } = await bootServer();
   t.after(() => server.close());

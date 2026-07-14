@@ -36,7 +36,7 @@ Notes:
   exists, or after the dev server restarted — copy your text, reload, and
   continue in the file directly.
 - Saves are atomic at the process level: an interrupted save never leaves a
-  half-written post — the previous complete version stays in place. Durability
+  half-written post — a complete version (old or new) is always in place. Durability
   across a hard OS crash or power loss is not guaranteed (no fsync); after one,
   check the file and re-save from the editor or git if needed.
 - Images with title text (`![alt](url "title")`) are preserved when you write

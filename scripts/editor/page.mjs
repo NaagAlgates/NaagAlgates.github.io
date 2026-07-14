@@ -36,6 +36,7 @@ export function editorPageHtml({ clientSrc }) {
 <input id="tags" placeholder="tech, ai">
 <div id="editor"></div>
 <button id="save">Save post</button>
+<button id="reset" type="button" style="background:#666; margin-left:10px;">Start a new post</button>
 <div id="status"></div>
 <script type="module" src="${clientSrc}"></script>
 </body>

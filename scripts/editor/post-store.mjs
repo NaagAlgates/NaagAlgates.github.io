@@ -120,6 +120,12 @@ export class PostStore {
   #clock;
   #registry = new Map(); // postId -> { slug, ino, rev }
   #queue = Promise.resolve();
+  #lastSave = null; // most recent successful save; lets the client recover
+  // ownership when the dev server's post-save page reload beats the response
+
+  get lastSave() {
+    return this.#lastSave;
+  }
 
   constructor({ dir, fsx, clock }) {
     this.#dir = resolve(dir);
@@ -204,7 +210,8 @@ export class PostStore {
     const newRev = sha256(bytes);
     const newId = randomUUID();
     this.#registry.set(newId, { slug, ino, rev: newRev, pubDate });
-    return { postId: newId, slug, path: target, rev: newRev, pubDate };
+    this.#lastSave = { postId: newId, slug, path: target, rev: newRev, pubDate };
+    return this.#lastSave;
   }
 
   async #update(fsx, valid, postId, rev) {
@@ -264,6 +271,7 @@ export class PostStore {
       throw err;
     }
     this.#registry.set(postId, { ...entry, ino, rev: newRev, pubDate });
-    return { postId, slug: entry.slug, path: target, rev: newRev, pubDate };
+    this.#lastSave = { postId, slug: entry.slug, path: target, rev: newRev, pubDate };
+    return this.#lastSave;
   }
 }
