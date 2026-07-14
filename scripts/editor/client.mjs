@@ -12,9 +12,12 @@ const editor = new Editor({
   initialEditType: "wysiwyg",
   previewStyle: "vertical",
   usageStatistics: false,
-  // Toast UI's dist bundle embeds DOMPurify 2.3.3, which has known mXSS /
-  // prototype-pollution bypasses. This hook makes Toast UI sanitize with the
-  // patched DOMPurify from node_modules instead of the embedded copy.
+  // Toast UI's dist bundle embeds DOMPurify 2.3.3 (known mXSS / prototype-
+  // pollution bypasses) and calls it internally on some WYSIWYG parsing
+  // paths this hook does not intercept. This hook routes the render/preview
+  // path through the patched DOMPurify 3.x from node_modules; the CSP on the
+  // /_editor page (script-src 'self', no unsafe-inline) is the backstop that
+  // prevents ANY sanitizer bypass — embedded or not — from executing script.
   customHTMLSanitizer: (html) => DOMPurify.sanitize(html),
 });
 // Dev-only page; exposing the instance makes the editor scriptable for
