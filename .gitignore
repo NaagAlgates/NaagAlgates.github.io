@@ -13,6 +13,9 @@ node_modules/
 .DS_Store
 npm-debug.log*
 
+# playwright mcp scratch (local editor verification)
+.playwright-mcp/
+
 # env
 .env
 .env.production
