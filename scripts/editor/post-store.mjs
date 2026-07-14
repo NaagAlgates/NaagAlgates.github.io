@@ -195,22 +195,30 @@ export class PostStore {
     const content = renderPostFile({ ...valid, pubDate }, valid.body);
 
     const { bytes, ino } = await this.#writeTemp(fsx, temp, content);
+
+    // Record ownership BEFORE the file becomes visible: the moment link()
+    // lands, the content watcher can reload the editor tab, and a reloaded
+    // client immediately queries /last-save — which must already answer.
+    // (link preserves the temp file's inode, so ino/rev are already exact.)
+    const newRev = sha256(bytes);
+    const newId = randomUUID();
+    const prevLastSave = this.#lastSave;
+    this.#registry.set(newId, { slug, ino, rev: newRev, pubDate });
+    this.#lastSave = { postId: newId, slug, path: target, rev: newRev, pubDate };
+
     try {
       // Exclusive placement: link() fails with EEXIST if target exists, so a
       // pre-existing post can never be clobbered (no existsSync TOCTOU).
       await fsx.link(temp, target);
     } catch (err) {
+      this.#registry.delete(newId);
+      this.#lastSave = prevLastSave;
       await fsx.unlink(temp).catch(() => {});
       if (err && err.code === "EEXIST")
         throw new ConflictError(`a post already exists at ${slug}.md`);
       throw err;
     }
     await fsx.unlink(temp).catch(() => {});
-
-    const newRev = sha256(bytes);
-    const newId = randomUUID();
-    this.#registry.set(newId, { slug, ino, rev: newRev, pubDate });
-    this.#lastSave = { postId: newId, slug, path: target, rev: newRev, pubDate };
     return this.#lastSave;
   }
 

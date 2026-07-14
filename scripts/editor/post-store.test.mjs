@@ -363,6 +363,51 @@ test("validation: empty-string tags and over-long slugs are rejected", async () 
   );
 });
 
+test("lastSave is queryable the instant the post becomes visible, and rolls back on failed create", async () => {
+  const dir = await makeDir();
+  let store;
+  let lastSaveAtLink = null;
+  const fsx = makeFsx({
+    before: (op) => {
+      if (op === "link") lastSaveAtLink = store.lastSave; // moment of visibility
+    },
+  });
+  store = new PostStore({ dir, fsx });
+  const created = await store.save({ input: INPUT, mode: "create" });
+  // A reload triggered by the link() publish must find lastSave already set.
+  assert.ok(lastSaveAtLink, "lastSave was not set before the publish");
+  assert.equal(lastSaveAtLink.postId, created.postId);
+  assert.equal(lastSaveAtLink.rev, created.rev);
+
+  // Failed duplicate create must not clobber lastSave (rollback).
+  await assert.rejects(store.save({ input: INPUT, mode: "create" }), ConflictError);
+  assert.equal(store.lastSave.postId, created.postId);
+  assert.equal(store.lastSave.rev, created.rev);
+});
+
+test("TITLED_IMAGE covers CommonMark title/destination variants", async () => {
+  const { TITLED_IMAGE } = await import("./markdown-flags.mjs");
+  const positive = [
+    '![alt](https://e.com/i.png "title")',
+    "![alt](https://e.com/i.png 'title')",
+    "![alt](https://e.com/i.png (title))",
+    '![alt](<https://e.com/my image.png> "title")',
+    '![alt](https://e.com/i_(1).png "title")', // balanced parens in dest
+    '![alt](i.png "he said \\"hi\\"")', // escaped quotes in title
+    'text before ![a](u.png "t") after',
+  ];
+  const negative = [
+    "![alt](https://e.com/i.png)",
+    "![alt](<https://e.com/my image.png>)",
+    "[not an image](u.png \"t\")",
+    "plain text with \"quotes\" and (parens)",
+  ];
+  // (A titled image inside inline code still matches — an acceptable false
+  // positive: the protection only ever blocks a mode switch, never data.)
+  for (const s of positive) assert.ok(TITLED_IMAGE.test(s), `should match: ${s}`);
+  for (const s of negative) assert.ok(!TITLED_IMAGE.test(s), `should not match: ${s}`);
+});
+
 test("serializeFrontmatter emits the established shape", () => {
   const fm = serializeFrontmatter({
     title: "T", description: "D", pubDate: "2026-03-05", tags: ["a", "b"],

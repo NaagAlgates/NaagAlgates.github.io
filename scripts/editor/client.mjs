@@ -3,6 +3,7 @@
 // prosemirror dependencies from node_modules — no CDN, dev only.
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
+import { TITLED_IMAGE } from "./markdown-flags.mjs";
 
 const editor = new Editor({
   el: document.querySelector("#editor"),
@@ -20,7 +21,6 @@ window.__editor = editor;
 // Markdown mode preserves them byte-exact. The changeMode event fires AFTER
 // conversion (the title is already gone from getMarkdown() by then), so keep
 // a snapshot of the markdown as typed and test that instead.
-const TITLED_IMAGE = /!\[[^\]]*\]\([^)\s]+\s+"[^"]*"\)/;
 let mdSnapshot = "";
 let lossyOverrideUntil = 0;
 editor.on("change", () => {
