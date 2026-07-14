@@ -97,6 +97,8 @@ test("endpoint: full save lifecycle over HTTP", async (t) => {
     body: JSON.stringify({ ...POST_INPUT, mode: "update", postId: c.postId, rev: c.rev }),
   });
   assert.equal(stale.status, 409);
+  // the conflict carries an explicit, human-readable message for the UI
+  assert.match(JSON.parse(stale.body).error, /stale rev|changed/i);
 
   // unknown postId -> 409
   const unknown = await request(port, {
@@ -112,6 +114,10 @@ test("endpoint: full save lifecycle over HTTP", async (t) => {
     headers: goodPostHeaders(port), body: JSON.stringify(POST_INPUT),
   });
   assert.equal(dup.status, 409);
+  // explicit "already exists" message, and the existing file is untouched
+  assert.match(JSON.parse(dup.body).error, /already exists/i);
+  const stillOnDisk = await fsp.readFile(join(blogDir, "endpoint-test-post.md"), "utf8");
+  assert.match(stillOnDisk, /Edited\./); // the update's content, not the dup's
 
   // invalid input -> 400
   const invalid = await request(port, {
