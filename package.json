@@ -10,7 +10,9 @@
     "preview": "astro preview",
     "astro": "astro",
     "new": "node scripts/new-post.mjs",
-    "test": "node --test \"scripts/editor/*.test.mjs\""
+    "test": "node --test \"scripts/editor/*.test.mjs\"",
+    "test:build": "node --test scripts/editor/build-images.check.mjs",
+    "test:e2e": "node scripts/editor/editor-e2e.mjs"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.11",
