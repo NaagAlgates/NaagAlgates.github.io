@@ -19,7 +19,7 @@
 //
 // Image writes are no-clobber: an existing destination with identical bytes
 // is reused; different bytes abort the run with a non-zero exit.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sniffImageType } from "./editor/image-store.mjs";
@@ -101,6 +101,12 @@ function writeAllOrNothing(imagesDir, images, dryRun) {
 }
 
 function migrateFile(file, imagesDir, dryRun) {
+  // Refuse symlinks and non-files up front: the backup/rewrite below must
+  // never follow a link and write outside the intended location (CWE-59).
+  const st = lstatSync(file);
+  if (st.isSymbolicLink() || !st.isFile()) {
+    throw new Error(`refusing symlink or non-regular-file input: ${file}`);
+  }
   const raw = readFileSync(file, "utf8");
   const prefix = `${basename(file).replace(/\.md$/, "")}-`;
   const { text, images, strippedPrefix } = extractInlineImages(raw, { prefix });
@@ -117,7 +123,9 @@ function migrateFile(file, imagesDir, dryRun) {
     );
     return;
   }
-  writeFileSync(`${file}.bak`, raw); // exact pre-migration bytes
+  // "wx" = O_CREAT|O_EXCL: fails on ANY existing path, including a planted
+  // symlink — the backup can never follow a link or clobber a prior backup.
+  writeFileSync(`${file}.bak`, raw, { flag: "wx" });
   writeFileSync(file, text);
   console.log(
     `rewrote  ${file}: ${images.length} image(s) extracted` +

@@ -195,6 +195,30 @@ test("cli: --stdin --prefix extracts only, touches no markdown file", async () =
   );
 });
 
+test("cli: symlink input and pre-existing .bak are refused (no follow, no clobber)", async () => {
+  const dir = await makeDir();
+  const imagesDir = join(dir, "images");
+  const real = join(dir, "real.md");
+  const link = join(dir, "post.md");
+  await fsp.writeFile(real, FIXTURE_MD);
+  await fsp.symlink(real, link);
+  const viaLink = runCli(["--images-dir", imagesDir, link], { cwd: dir });
+  assert.notEqual(viaLink.status, 0);
+  assert.match(viaLink.stderr, /refusing symlink/);
+  assert.equal(await fsp.readFile(real, "utf8"), FIXTURE_MD); // untouched
+
+  // planted .bak symlink: the exclusive backup write must refuse to follow it
+  const md = join(dir, "direct.md");
+  const victim = join(dir, "victim.txt");
+  await fsp.writeFile(md, FIXTURE_MD);
+  await fsp.writeFile(victim, "precious");
+  await fsp.symlink(victim, `${md}.bak`);
+  const planted = runCli(["--images-dir", imagesDir, md], { cwd: dir });
+  assert.notEqual(planted.status, 0);
+  assert.equal(await fsp.readFile(victim, "utf8"), "precious"); // NOT clobbered
+  assert.equal(await fsp.readFile(md, "utf8"), FIXTURE_MD); // md not rewritten
+});
+
 test("cli: --stdin without --prefix is an error", async () => {
   const dir = await makeDir();
   const res = runCli(["--stdin", "--images-dir", join(dir, "images")], { cwd: dir, input: "x" });
