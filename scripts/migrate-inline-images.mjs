@@ -66,8 +66,13 @@ function planImageWrite(imagesDir, { name, buf }) {
   let existing = null;
   try {
     existing = readFileSync(target);
-  } catch {
-    /* not there — the good case */
+  } catch (err) {
+    // ONLY a missing file means "free to write". Anything else (EISDIR,
+    // EACCES, ...) must abort the whole run BEFORE any image is written,
+    // or all-or-nothing breaks.
+    if (err.code !== "ENOENT") {
+      throw new Error(`cannot use destination ${target}: ${err.code ?? err.message}`);
+    }
   }
   if (existing) {
     if (Buffer.compare(existing, buf) === 0) return { target, buf, action: "reuse" };

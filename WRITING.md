@@ -78,9 +78,9 @@ edit the file in your IDE, treat the file as the source of truth from then on
 
 One formatting rule when hand-editing: the file must start with `---` on the
 very first line (byte 0). Astro tolerates blank lines before the frontmatter,
-but frontmatter-aware tools (markdown previews, linters — MD012/MD041/MD022 —
-and likely other renderers) stop treating the block as frontmatter and show
-it as visible text.
+but tools that special-case frontmatter can stop recognizing it: the VS Code
+preview rendered it as visible body text, and markdownlint flags it
+(MD012/MD041/MD022). Keep `---` at byte 0 and none of that happens.
 
 ## Frontmatter
 
