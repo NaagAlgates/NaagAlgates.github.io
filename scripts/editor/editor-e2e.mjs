@@ -169,14 +169,21 @@ const SAVE_SLUG = "e2e-image-roundtrip-check";
 const saved = await page.evaluate(async ({ pngB64, title }) => {
   const editor = window.__editor;
   editor.changeMode("markdown", true);
-  // Upload through the real hook, capture the returned /images/ URL.
+  editor.setMarkdown("intro\n\n");
+  // Upload through the real hook; the callback inserts the markdown itself
+  // (we do NOT hand-write it — criterion 1 needs the hook-produced syntax to
+  // be what gets saved).
   const bytes = Uint8Array.from(atob(pngB64), (c) => c.charCodeAt(0));
   const file = new File([bytes], "roundtrip.png", { type: "image/png" });
   const url = await new Promise((resolve) => {
-    editor.eventEmitter.emit("addImageBlobHook", file, (u) => resolve(u));
+    editor.eventEmitter.emit("addImageBlobHook", file, (u, t) => {
+      editor.eventEmitter.emit("command", "addImage", { imageUrl: u, altText: t || "rt" });
+      resolve(u);
+    });
   });
-  // A markdown image AND a sized raw <img> using the same uploaded asset.
-  editor.setMarkdown(`intro\n\n![rt](${url})\n\n<img src="${url}" width="321">\n`);
+  // Append a sized raw <img> (Markdown tab) using the same uploaded asset.
+  await new Promise((r) => setTimeout(r, 200));
+  editor.setMarkdown(`${editor.getMarkdown()}\n\n<img src="${url}" width="321">\n`);
   document.getElementById("title").value = title;
   document.getElementById("description").value = "e2e roundtrip";
   document.getElementById("save").click();
@@ -191,6 +198,28 @@ const saved = await page.evaluate(async ({ pngB64, title }) => {
 }, { pngB64: PNG, title: SAVE_TITLE });
 
 check("save succeeds after upload", /^Saved /.test(saved.status), saved.status.slice(0, 80));
+const relUrl = saved.url ?? "";
+
+// The uploaded asset from THIS saved flow serves 200 (criterion 2, the
+// roundtrip URL specifically — not the earlier check's asset).
+const savedImg = relUrl ? (await page.request.get(`${BASE}${relUrl}`)).status() : 0;
+check("saved flow's uploaded image URL serves 200", savedImg === 200, `${relUrl} -> ${savedImg}`);
+
+// Inspect the SAVED .md on disk directly (criterion 1: the hook-produced
+// markdown and no data URI actually landed in the file). Path comes from the
+// "Saved <path>" status line.
+const savedPath = saved.status.match(/^Saved (\/[^\n]+\.md)/)?.[1];
+let mdOnDisk = "";
+if (savedPath) {
+  const { readFile } = await import("node:fs/promises");
+  mdOnDisk = await readFile(savedPath, "utf8").catch(() => "");
+}
+check(
+  "saved .md contains the hook-produced /images/ markdown image",
+  new RegExp(`!\\[[^\\]]*\\]\\(${relUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)`).test(mdOnDisk),
+  savedPath ?? "no path in status",
+);
+check("saved .md contains no data: URI", mdOnDisk.length > 0 && !mdOnDisk.includes("data:image"));
 
 // Fetch the saved post's dev page and confirm both references render.
 let pageHtml = "";
@@ -202,7 +231,6 @@ for (let i = 0; i < 15; i++) {
   }
   await new Promise((r) => setTimeout(r, 300));
 }
-const relUrl = saved.url ?? "";
 check(
   "saved post's dev page renders the uploaded /images/ reference",
   pageHtml.includes(`src="${relUrl}"`),
@@ -214,7 +242,7 @@ check(
     pageHtml,
   ),
 );
-check("saved post has no data: URI", pageHtml.includes("data:image") === false);
+check("saved post dev page has no data: URI", pageHtml.includes("data:image") === false);
 
 await browser.close();
 
