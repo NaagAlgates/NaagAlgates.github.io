@@ -35,10 +35,9 @@ Notes:
   changed on disk by something else, if a post with the same slug already
   exists, or after the dev server restarted — copy your text, reload, and
   continue in the file directly.
-- Saves are atomic at the process level: an interrupted save never leaves a
-  half-written post — a complete version (old or new) is always in place. Durability
-  across a hard OS crash or power loss is not guaranteed (no fsync); after one,
-  check the file and re-save from the editor or git if needed.
+- An interrupted save never leaves a half-written post — you always keep a
+  complete version, old or new. After a hard crash or power loss, glance at
+  the file and re-save from the editor (or restore from git) if it looks off.
 - Images with title text (`![alt](url "title")`) are preserved when you write
   them in the **Markdown tab**. The WYSIWYG view can't represent image titles
   and drops them if you edit there — the editor warns you when that applies.
@@ -76,11 +75,10 @@ save (you'll get a conflict message; your text stays in the editor). If you
 edit the file in your IDE, treat the file as the source of truth from then on
 — or copy your text, press "Start a new post", and re-save under a new title.
 
-One formatting rule when hand-editing: the file must start with `---` on the
-very first line (byte 0). Astro tolerates blank lines before the frontmatter,
-but tools that special-case frontmatter can stop recognizing it: the VS Code
-preview rendered it as visible body text, and markdownlint flags it
-(MD012/MD041/MD022). Keep `---` at byte 0 and none of that happens.
+One formatting rule when hand-editing: make `---` the very first line, with no
+blank lines above it. The site builds fine either way, but if blank lines creep
+in above the `---`, some markdown previews (including VS Code's) stop treating
+the block as frontmatter and show it as plain text at the top of the post.
 
 ## Frontmatter
 
