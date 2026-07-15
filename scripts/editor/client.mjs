@@ -6,11 +6,13 @@ import "@toast-ui/editor/dist/toastui-editor.css";
 import DOMPurify from "dompurify";
 import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
 
-/** Which WYSIWYG-lossy construct (if any) the markdown contains. */
+/** Every WYSIWYG-lossy construct the markdown contains, or null — the
+ * warning must name ALL of them, or the unnamed one is silently lost. */
 function lossyConstruct(md) {
-  if (hasTitledImage(md)) return 'image titles (![alt](url "title"))';
-  if (hasSizedImage(md)) return "image width/height attributes (<img ... width>)";
-  return null;
+  const found = [];
+  if (hasTitledImage(md)) found.push('image titles (![alt](url "title"))');
+  if (hasSizedImage(md)) found.push("image width/height attributes (<img ... width>)");
+  return found.length ? found.join(" and ") : null;
 }
 
 // Upload the picked/pasted image to the dev-only endpoint and hand the
@@ -58,8 +60,9 @@ const editor = new Editor({
   // the residual would require replacing Toast UI's embedded sanitizer.
   customHTMLSanitizer: (html) => DOMPurify.sanitize(html),
   // Without this hook Toast UI base64-inlines picked images into the
-  // markdown (megabyte posts, broken previews — issue #45). Images now go
-  // through the dev-only upload endpoint into public/images/ instead.
+  // markdown — megabyte posts that markdown tooling handles poorly and
+  // that push saves toward the request-size limit (issue #45). Images now
+  // go through the dev-only upload endpoint into public/images/ instead.
   hooks: {
     addImageBlobHook: (blob, callback) => {
       uploadImage(blob, callback);
