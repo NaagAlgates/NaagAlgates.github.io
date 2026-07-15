@@ -11,9 +11,11 @@ import { createEditorMiddleware } from "./middleware.mjs";
 
 async function bootServer() {
   const blogDir = await fsp.mkdtemp(join(tmpdir(), "blog-editor-http-"));
+  const imagesDir = await fsp.mkdtemp(join(tmpdir(), "blog-editor-images-http-"));
   let server;
   const middleware = createEditorMiddleware({
     blogDir,
+    imagesDir,
     getBoundPort: () => server.address()?.port,
     clientSrc: "/@fs/test/client.mjs",
   });
@@ -29,7 +31,7 @@ async function bootServer() {
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const port = server.address().port;
-  return { server, port, blogDir };
+  return { server, port, blogDir, imagesDir };
 }
 
 function request(port, { method = "GET", path = "/_editor", headers = {}, body } = {}) {
@@ -235,6 +237,90 @@ test("endpoint: last-save recovery snapshot is gated and accurate", async (t) =>
   assert.equal(l.postId, c.postId);
   assert.equal(l.rev, c.rev);
   assert.equal(l.slug, "endpoint-test-post");
+});
+
+const PNG_BYTES = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from("png-payload"),
+]);
+
+const uploadHeaders = (port, extra = {}) => ({
+  host: `localhost:${port}`,
+  origin: `http://localhost:${port}`,
+  "x-blog-editor": "1",
+  "content-type": "application/octet-stream",
+  ...extra,
+});
+
+test("endpoint: image upload writes the file and returns its /images/ URL", async (t) => {
+  const { server, port, imagesDir } = await bootServer();
+  t.after(() => server.close());
+
+  const res = await request(port, {
+    method: "POST",
+    path: `/_editor/api/upload-image?name=${encodeURIComponent("My Photo.png")}`,
+    headers: uploadHeaders(port),
+    body: PNG_BYTES,
+  });
+  assert.equal(res.status, 200, res.body);
+  const data = JSON.parse(res.body);
+  assert.match(data.url, /^\/images\/my-photo-[0-9a-f]{8}\.png$/);
+  assert.deepEqual(await fsp.readFile(join(imagesDir, data.fileName)), PNG_BYTES);
+
+  // idempotent: identical bytes come back with the identical URL
+  const again = await request(port, {
+    method: "POST",
+    path: `/_editor/api/upload-image?name=${encodeURIComponent("My Photo.png")}`,
+    headers: uploadHeaders(port),
+    body: PNG_BYTES,
+  });
+  assert.equal(JSON.parse(again.body).url, data.url);
+});
+
+test("endpoint: image upload input validation (400s) and size cap (413)", async (t) => {
+  const { server, port, imagesDir } = await bootServer();
+  t.after(() => server.close());
+
+  // no name
+  const noName = await request(port, {
+    method: "POST", path: "/_editor/api/upload-image",
+    headers: uploadHeaders(port), body: PNG_BYTES,
+  });
+  assert.equal(noName.status, 400);
+
+  // not an allowed image type (SVG/text)
+  const svg = await request(port, {
+    method: "POST", path: "/_editor/api/upload-image?name=x.svg",
+    headers: uploadHeaders(port), body: Buffer.from("<svg></svg>"),
+  });
+  assert.equal(svg.status, 400);
+  assert.match(JSON.parse(svg.body).error, /unsupported image type/);
+
+  // over the 8 MiB cap
+  const big = await request(port, {
+    method: "POST", path: "/_editor/api/upload-image?name=big.png",
+    headers: uploadHeaders(port),
+    body: Buffer.concat([PNG_BYTES, Buffer.alloc(8 * 1024 * 1024)]),
+  });
+  assert.equal(big.status, 413);
+
+  // nothing landed on disk from any of the rejected uploads
+  assert.deepEqual(await fsp.readdir(imagesDir), []);
+});
+
+test("endpoint: image upload sits behind the same security gate", async (t) => {
+  const { server, port } = await bootServer();
+  t.after(() => server.close());
+  const upload = (headers) =>
+    request(port, {
+      method: "POST", path: "/_editor/api/upload-image?name=x.png",
+      headers, body: PNG_BYTES,
+    });
+  assert.equal((await upload(uploadHeaders(port, { host: "evil.example:80" }))).status, 403);
+  assert.equal((await upload(uploadHeaders(port, { origin: "http://evil.example" }))).status, 403);
+  const noHeader = uploadHeaders(port);
+  delete noHeader["x-blog-editor"];
+  assert.equal((await upload(noHeader)).status, 403);
 });
 
 test("endpoint: editor page is served and loads the client module", async (t) => {

@@ -4,7 +4,43 @@
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
 import DOMPurify from "dompurify";
-import { hasTitledImage } from "./markdown-flags.mjs";
+import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
+
+/** Which WYSIWYG-lossy construct (if any) the markdown contains. */
+function lossyConstruct(md) {
+  if (hasTitledImage(md)) return 'image titles (![alt](url "title"))';
+  if (hasSizedImage(md)) return "image width/height attributes (<img ... width>)";
+  return null;
+}
+
+// Upload the picked/pasted image to the dev-only endpoint and hand the
+// resulting /images/ URL back to Toast UI. Never fall back to the default
+// hook behavior (base64 data URI inlined into the markdown) — on failure,
+// report and insert nothing. callback(url) deliberately passes NO alt text:
+// the image popup fills alt from its own Description field in that case
+// (verified against the dist source's hookCallback).
+async function uploadImage(blob, callback) {
+  try {
+    const name = blob && blob.name ? blob.name : "pasted-image";
+    const res = await fetch(`/_editor/api/upload-image?name=${encodeURIComponent(name)}`, {
+      method: "POST",
+      headers: {
+        "content-type": (blob && blob.type) || "application/octet-stream",
+        "x-blog-editor": "1",
+      },
+      body: blob,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus("err", `Image not inserted: ${data.error || res.status}`);
+      return;
+    }
+    callback(data.url);
+    setStatus("ok", `Image saved to public${data.url} — referenced as ${data.url}`);
+  } catch (e) {
+    setStatus("err", `Image not inserted: ${e}`);
+  }
+}
 
 const editor = new Editor({
   el: document.querySelector("#editor"),
@@ -21,6 +57,14 @@ const editor = new Editor({
   // bypass — embedded or not — leaves executable markup. Fully eliminating
   // the residual would require replacing Toast UI's embedded sanitizer.
   customHTMLSanitizer: (html) => DOMPurify.sanitize(html),
+  // Without this hook Toast UI base64-inlines picked images into the
+  // markdown (megabyte posts, broken previews — issue #45). Images now go
+  // through the dev-only upload endpoint into public/images/ instead.
+  hooks: {
+    addImageBlobHook: (blob, callback) => {
+      uploadImage(blob, callback);
+    },
+  },
 });
 // Dev-only page; exposing the instance makes the editor scriptable for
 // fidelity checks and debugging.
@@ -37,11 +81,13 @@ editor.on("change", () => {
   if (editor.isMarkdownMode()) mdSnapshot = editor.getMarkdown();
 });
 editor.on("changeMode", (mode) => {
-  if (mode !== "wysiwyg" || !hasTitledImage(mdSnapshot)) return;
+  if (mode !== "wysiwyg") return;
+  const construct = lossyConstruct(mdSnapshot);
+  if (!construct) return;
   if (Date.now() < lossyOverrideUntil) {
     setStatus(
       "err",
-      "Switched to WYSIWYG — the image titles in this draft were dropped " +
+      `Switched to WYSIWYG — the ${construct} in this draft were dropped ` +
         "(protection overridden).",
     );
     return;
@@ -56,7 +102,7 @@ editor.on("changeMode", (mode) => {
   }, 0);
   setStatus(
     "err",
-    'This draft has images with title text (![alt](url "title")), which the ' +
+    `This draft has ${construct}, which the ` +
       "WYSIWYG view cannot represent — kept you in the Markdown tab so " +
       "nothing is lost. Switch again within 8 seconds to override.",
   );
@@ -104,9 +150,10 @@ function restoreSession() {
     document.getElementById("description").value = s.description ?? "";
     document.getElementById("tags").value = s.tags ?? "";
     if (s.body) {
-      // Restoring into the WYSIWYG model would strip image titles; restore
-      // titled-image drafts in markdown mode so restore is never lossy.
-      if (hasTitledImage(s.body)) editor.changeMode("markdown", true);
+      // Restoring into the WYSIWYG model would strip image titles and
+      // <img> width/height; restore such drafts in markdown mode so
+      // restore is never lossy.
+      if (lossyConstruct(s.body)) editor.changeMode("markdown", true);
       editor.setMarkdown(s.body);
       mdSnapshot = s.body;
     }

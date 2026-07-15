@@ -44,6 +44,42 @@ Notes:
   and drops them if you edit there — the editor warns you when that applies.
 - Publishing is unchanged: commit the file and push (see below).
 
+### Images
+
+Inserting an image in the editor (toolbar button, paste, or drag-and-drop)
+uploads the file into `public/images/` and puts a normal reference like
+`![alt](/images/my-photo-1a2b3c4d.png)` into the markdown. Images are never
+embedded into the post as base64 — that used to produce megabyte-sized
+markdown files that broke previews and would eventually make saving fail.
+Commit the new file(s) under `public/images/` together with the post.
+
+Allowed formats: PNG, JPEG, GIF, WebP (validated by content, up to 8 MB).
+SVG is deliberately not accepted.
+
+**To control an image's display size**, switch to the **Markdown tab** and
+write the image as plain HTML:
+
+```html
+<img src="/images/my-photo-1a2b3c4d.png" width="400" alt="my photo">
+```
+
+`width`/`height` attributes only survive in the Markdown tab — the WYSIWYG
+view drops them (same as image titles), so the editor blocks switching to
+WYSIWYG while the draft has a sized image and warns you, exactly like the
+titled-image protection. Switch again within 8 seconds to override knowingly.
+
+### Editing post files outside the editor
+
+The editor refuses to overwrite a post that changed on disk since its last
+save (you'll get a conflict message; your text stays in the editor). If you
+edit the file in your IDE, treat the file as the source of truth from then on
+— or copy your text, press "Start a new post", and re-save under a new title.
+
+One formatting rule when hand-editing: the file must start with `---` on the
+very first line (byte 0). Astro tolerates blank lines before the frontmatter,
+but markdown previews, linters (MD012/MD041/MD022), and GitHub stop treating
+the block as frontmatter and render it as visible text.
+
 ## Frontmatter
 
 ```markdown

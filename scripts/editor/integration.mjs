@@ -8,6 +8,7 @@ import { createEditorMiddleware } from "./middleware.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BLOG_DIR = join(HERE, "..", "..", "src", "content", "blog");
+const IMAGES_DIR = join(HERE, "..", "..", "public", "images");
 const CLIENT_PATH = join(HERE, "client.mjs");
 
 export default function localBlogEditor() {
@@ -35,7 +36,12 @@ export default function localBlogEditor() {
         // resolves @toast-ui/editor (and its CSS) from node_modules.
         const clientSrc = `/@fs/${CLIENT_PATH}`;
         server.middlewares.use(
-          createEditorMiddleware({ blogDir: BLOG_DIR, getBoundPort, clientSrc }),
+          createEditorMiddleware({
+            blogDir: BLOG_DIR,
+            imagesDir: IMAGES_DIR,
+            getBoundPort,
+            clientSrc,
+          }),
         );
       },
     },

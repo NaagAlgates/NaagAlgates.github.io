@@ -29,3 +29,25 @@ export function hasTitledImage(markdown) {
   }
   return found || [...imageReferenceIds].some((id) => titledDefinitionIds.has(id));
 }
+
+// Raw <img> HTML carrying width/height — the OTHER construct Toast UI's
+// WYSIWYG conversion silently drops (its convertors keep only src/alt; see
+// the sized-image guard rationale in .omc/plans/45-editor-image-upload.md).
+// The parser walk means code spans/fences never false-positive: inline HTML
+// surfaces as `html` nodes, code as `code`/`inlineCode` nodes.
+const SIZED_IMG_RE = /<img\b[^>]*\s(?:width|height)\s*=/i;
+
+export function hasSizedImage(markdown) {
+  let found = false;
+  const walk = (node) => {
+    if (!node || found) return;
+    if (node.type === "html" && SIZED_IMG_RE.test(node.value)) found = true;
+    if (node.children) for (const child of node.children) walk(child);
+  };
+  try {
+    walk(fromMarkdown(String(markdown)));
+  } catch {
+    return false; // unparseable input has nothing to protect
+  }
+  return found;
+}
