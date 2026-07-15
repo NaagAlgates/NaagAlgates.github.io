@@ -9,11 +9,19 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "new": "node scripts/new-post.mjs"
+    "new": "node scripts/new-post.mjs",
+    "test": "node --test \"scripts/editor/*.test.mjs\"",
+    "test:build": "node --test scripts/editor/build-images.check.mjs",
+    "test:e2e": "node scripts/editor/editor-e2e.mjs"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.11",
     "@astrojs/sitemap": "^3.2.1",
     "astro": "^5.2.5"
+  },
+  "devDependencies": {
+    "@toast-ui/editor": "^3.2.2",
+    "dompurify": "^3.4.12",
+    "mdast-util-from-markdown": "^2.0.3"
   }
 }
