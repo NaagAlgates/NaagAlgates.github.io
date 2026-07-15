@@ -1,0 +1,86 @@
+# robots.txt — www.nagaraj.com.au
+#
+# Policy: this is a human-written blog. Search engines and AI *answer/citation*
+# crawlers are welcomed (they drive discovery and send readers here). AI
+# *training* crawlers are disallowed, consistent with the site's "human-written,
+# never by AI" positioning.
+#
+# robots.txt groups are matched by most-specific user-agent token with NO
+# inheritance from "*", so every bot we care about gets its own explicit group.
+
+Sitemap: https://www.nagaraj.com.au/sitemap-index.xml
+
+# ---------------------------------------------------------------------------
+# Default — allow everything not explicitly restricted below.
+# Content-signal is Cloudflare's declarative convention (a preference / express
+# reservation of rights, NOT a technically enforced control): permit search and
+# AI grounding/answers, forbid AI training.
+# ---------------------------------------------------------------------------
+User-agent: *
+Allow: /
+Content-signal: search=yes, ai-input=yes, ai-train=no
+
+# ---------------------------------------------------------------------------
+# Search & AI-answer/citation crawlers — ALLOW (Google + chat-engine visibility)
+# ---------------------------------------------------------------------------
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Amzn-SearchBot
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+# ---------------------------------------------------------------------------
+# User-directed fetchers that honor robots.txt — ALLOW (a real reader asked)
+# ---------------------------------------------------------------------------
+User-agent: Claude-User
+Allow: /
+
+User-agent: Amzn-User
+Allow: /
+
+# ---------------------------------------------------------------------------
+# AI training crawlers — DISALLOW (block model training on this content)
+# ---------------------------------------------------------------------------
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+# General-purpose corpora (feed search/research/training downstream). Blocking
+# is a deliberate policy choice and not strictly zero-cost to visibility.
+User-agent: CCBot
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+# Google-Extended controls BOTH Gemini training AND Gemini grounding/citation,
+# and cannot be split. Disallowed here to opt out of Gemini training, which also
+# forgoes Gemini grounding of this content — a deliberate owner decision.
+User-agent: Google-Extended
+Disallow: /

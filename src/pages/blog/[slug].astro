@@ -4,7 +4,15 @@ import type { CollectionEntry } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import FormattedDate from "../../components/FormattedDate.astro";
 import Share from "../../components/Share.astro";
-import { SITE_TITLE, SITE_URL, AUTHOR, tagSlug } from "../../consts";
+import {
+  SITE_TITLE,
+  SITE_URL,
+  AUTHOR,
+  AUTHOR_URL,
+  AUTHOR_SAMEAS,
+  OG_DEFAULT_IMAGE,
+  tagSlug,
+} from "../../consts";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");
@@ -19,22 +27,32 @@ interface Props {
 }
 const { post } = Astro.props;
 const { Content } = await render(post);
-const url = new URL(`/blog/${post.id}`, SITE_URL).href;
+// Trailing-slash form to match the canonical + sitemap URLs (no redirect hop).
+const url = new URL(`/blog/${post.id}/`, SITE_URL).href;
+const publishedTime = post.data.pubDate.toISOString();
+const modifiedTime = post.data.updatedDate?.toISOString();
+const ogImage = new URL(post.data.image ?? OG_DEFAULT_IMAGE, SITE_URL).href;
+const author = {
+  "@type": "Person",
+  name: AUTHOR,
+  url: AUTHOR_URL,
+  sameAs: AUTHOR_SAMEAS,
+};
 
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
   headline: post.data.title,
   description: post.data.description,
-  datePublished: post.data.pubDate.toISOString(),
+  datePublished: publishedTime,
+  ...(modifiedTime ? { dateModified: modifiedTime } : {}),
   keywords: post.data.tags.join(", "),
   inLanguage: "en",
   url,
+  image: ogImage,
   mainEntityOfPage: { "@type": "WebPage", "@id": url },
-  author: { "@type": "Person", name: AUTHOR },
-  publisher: { "@type": "Person", name: AUTHOR },
-  // Explicit, machine-readable signal: this content is human-authored.
-  creativeWorkStatus: "Human-written, not AI-generated",
+  author,
+  publisher: author,
 };
 ---
 
@@ -42,6 +60,10 @@ const jsonLd = {
   title={post.data.title}
   description={post.data.description}
   jsonLd={jsonLd}
+  type="article"
+  image={post.data.image}
+  publishedTime={publishedTime}
+  tags={post.data.tags}
 >
   <article>
     <header class="article-header">
