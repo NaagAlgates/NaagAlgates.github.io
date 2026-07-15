@@ -2,6 +2,7 @@
 // numbers (never by client-supplied names/MIME), derives a content-addressed
 // filename, and places files into public/images/ so posts can reference them
 // as /images/<file>. See .omc/plans/45-editor-image-upload.md.
+import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { ValidationError, defaultFsx, sha256, slugify } from "./post-store.mjs";
 
@@ -112,11 +113,11 @@ export class ImageStore {
     for (const hashLen of [8, 16, digest.length]) {
       const fileName = imageFileName(originalName, buf, hashLen);
       const target = this.#confine(fileName);
-      const temp = this.#confine(`.${fileName}.tmp`);
-
-      // A previous interrupted save may have left a stale temp; it is
-      // dot-prefixed (never referenced by posts) and owned by this store.
-      await fsx.unlink(temp).catch(() => {});
+      // Unique per save attempt: a shared deterministic temp name would let
+      // concurrent uploads of identical bytes unlink each other's half-
+      // written temp. With unique names, the atomic link() below is the
+      // only contention point.
+      const temp = this.#confine(`.${randomUUID()}.tmp`);
       let fh;
       try {
         fh = await fsx.open(temp, "wx");

@@ -55,7 +55,10 @@ export function extractInlineImages(mdText, { prefix }) {
   return { text, images, strippedPrefix };
 }
 
-function writeImageNoClobber(imagesDir, { name, buf }, dryRun) {
+/** Phase 1: decide what to do for one image without writing anything.
+ * Throws on a different-content conflict so the caller aborts BEFORE any
+ * write happens (all-or-nothing across the whole run). */
+function planImageWrite(imagesDir, { name, buf }) {
   const target = resolve(join(imagesDir, name));
   if (!target.startsWith(resolve(imagesDir) + "/")) {
     throw new Error(`refusing to write outside images dir: ${name}`);
@@ -67,11 +70,17 @@ function writeImageNoClobber(imagesDir, { name, buf }, dryRun) {
     /* not there — the good case */
   }
   if (existing) {
-    if (Buffer.compare(existing, buf) === 0) {
-      console.log(`reuse    ${target} (identical content already present)`);
-      return;
-    }
+    if (Buffer.compare(existing, buf) === 0) return { target, buf, action: "reuse" };
     throw new Error(`refusing to overwrite ${target}: exists with different content`);
+  }
+  return { target, buf, action: "write" };
+}
+
+/** Phase 2: perform a validated write plan. */
+function performImageWrite({ target, buf, action }, dryRun) {
+  if (action === "reuse") {
+    console.log(`reuse    ${target} (identical content already present)`);
+    return;
   }
   if (dryRun) {
     console.log(`[dry-run] would write ${target} (${buf.length} bytes)`);
@@ -79,6 +88,11 @@ function writeImageNoClobber(imagesDir, { name, buf }, dryRun) {
   }
   writeFileSync(target, buf, { flag: "wx" });
   console.log(`wrote    ${target} (${buf.length} bytes)`);
+}
+
+function writeAllOrNothing(imagesDir, images, dryRun) {
+  const plans = images.map((img) => planImageWrite(imagesDir, img)); // may throw: nothing written yet
+  for (const plan of plans) performImageWrite(plan, dryRun);
 }
 
 function migrateFile(file, imagesDir, dryRun) {
@@ -89,7 +103,7 @@ function migrateFile(file, imagesDir, dryRun) {
     console.log(`clean    ${file} (nothing to migrate)`);
     return;
   }
-  for (const img of images) writeImageNoClobber(imagesDir, img, dryRun);
+  writeAllOrNothing(imagesDir, images, dryRun);
   if (dryRun) {
     console.log(
       `[dry-run] would rewrite ${file}: ${images.length} image(s) extracted` +
@@ -113,7 +127,7 @@ function runStdin(prefix, imagesDir, dryRun) {
     console.log("clean    stdin (no inline images found)");
     return;
   }
-  for (const img of images) writeImageNoClobber(imagesDir, img, dryRun);
+  writeAllOrNothing(imagesDir, images, dryRun);
 }
 
 function main(argv) {

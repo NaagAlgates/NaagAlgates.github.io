@@ -130,6 +130,22 @@ test("cli: aborts without writing when a destination exists with different conte
   assert.deepEqual(await fsp.readFile(join(imagesDir, "post-1.png")), Buffer.from("impostor"));
 });
 
+test("cli: a conflict on a LATER image leaves EARLIER images unwritten (all-or-nothing)", async () => {
+  const dir = await makeDir();
+  const imagesDir = join(dir, "images");
+  const md = join(dir, "post.md");
+  await fsp.writeFile(md, FIXTURE_MD);
+  await fsp.mkdir(imagesDir, { recursive: true });
+  // conflict on the SECOND image only
+  await fsp.writeFile(join(imagesDir, "post-2.jpg"), Buffer.from("impostor"));
+
+  const res = runCli(["--images-dir", imagesDir, md], { cwd: dir });
+  assert.notEqual(res.status, 0);
+  assert.match(res.stderr, /refusing to overwrite/);
+  assert.equal(await fsp.readFile(md, "utf8"), FIXTURE_MD); // md untouched
+  assert.deepEqual(await fsp.readdir(imagesDir), ["post-2.jpg"]); // post-1.png NOT written
+});
+
 test("cli: identical existing destination is reused, not an error", async () => {
   const dir = await makeDir();
   const imagesDir = join(dir, "images");

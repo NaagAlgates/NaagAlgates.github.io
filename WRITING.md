@@ -50,7 +50,8 @@ Inserting an image in the editor (toolbar button, paste, or drag-and-drop)
 uploads the file into `public/images/` and puts a normal reference like
 `![alt](/images/my-photo-1a2b3c4d.png)` into the markdown. Images are never
 embedded into the post as base64 — that used to produce megabyte-sized
-markdown files that broke previews and would eventually make saving fail.
+markdown files that many markdown tools handle poorly and that would
+eventually push saves over the editor's request-size limit.
 Commit the new file(s) under `public/images/` together with the post.
 
 Allowed formats: PNG, JPEG, GIF, WebP (validated by content, up to 8 MB).
@@ -77,8 +78,9 @@ edit the file in your IDE, treat the file as the source of truth from then on
 
 One formatting rule when hand-editing: the file must start with `---` on the
 very first line (byte 0). Astro tolerates blank lines before the frontmatter,
-but markdown previews, linters (MD012/MD041/MD022), and GitHub stop treating
-the block as frontmatter and render it as visible text.
+but frontmatter-aware tools (markdown previews, linters — MD012/MD041/MD022 —
+and likely other renderers) stop treating the block as frontmatter and show
+it as visible text.
 
 ## Frontmatter
 
