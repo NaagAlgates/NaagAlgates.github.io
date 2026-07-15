@@ -161,7 +161,81 @@ check(
 // Criterion 8: the editor page loaded with no CSP violation in the console.
 check("no CSP violations on the editor page", cspErrors.length === 0, cspErrors[0] ?? "");
 
+// Criteria 1, 2, 5 (end-to-end): upload an image, SAVE the post, then fetch
+// the saved post's dev page and confirm the /images/ reference and a sized
+// <img width> both render. This is the full picker -> save -> render path.
+const SAVE_TITLE = "E2E Image Roundtrip Check";
+const SAVE_SLUG = "e2e-image-roundtrip-check";
+const saved = await page.evaluate(async ({ pngB64, title }) => {
+  const editor = window.__editor;
+  editor.changeMode("markdown", true);
+  // Upload through the real hook, capture the returned /images/ URL.
+  const bytes = Uint8Array.from(atob(pngB64), (c) => c.charCodeAt(0));
+  const file = new File([bytes], "roundtrip.png", { type: "image/png" });
+  const url = await new Promise((resolve) => {
+    editor.eventEmitter.emit("addImageBlobHook", file, (u) => resolve(u));
+  });
+  // A markdown image AND a sized raw <img> using the same uploaded asset.
+  editor.setMarkdown(`intro\n\n![rt](${url})\n\n<img src="${url}" width="321">\n`);
+  document.getElementById("title").value = title;
+  document.getElementById("description").value = "e2e roundtrip";
+  document.getElementById("save").click();
+  const t0 = Date.now();
+  while (Date.now() - t0 < 12000) {
+    const s = document.getElementById("status").textContent || "";
+    if (/^Saved /.test(s)) return { status: s, url };
+    if (/Not saved|Conflict/.test(s)) return { status: s, url, failed: true };
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return { status: document.getElementById("status").textContent, url, timedOut: true };
+}, { pngB64: PNG, title: SAVE_TITLE });
+
+check("save succeeds after upload", /^Saved /.test(saved.status), saved.status.slice(0, 80));
+
+// Fetch the saved post's dev page and confirm both references render.
+let pageHtml = "";
+for (let i = 0; i < 15; i++) {
+  const r = await page.request.get(`${BASE}/blog/${SAVE_SLUG}/`);
+  if (r.status() === 200) {
+    pageHtml = await r.text();
+    if (pageHtml.includes("/images/")) break;
+  }
+  await new Promise((r) => setTimeout(r, 300));
+}
+const relUrl = saved.url ?? "";
+check(
+  "saved post's dev page renders the uploaded /images/ reference",
+  pageHtml.includes(`src="${relUrl}"`),
+  relUrl,
+);
+check(
+  "saved post's dev page preserves the sized <img width>",
+  new RegExp(`<img[^>]+src="${relUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*width="321"`).test(
+    pageHtml,
+  ),
+);
+check("saved post has no data: URI", pageHtml.includes("data:image") === false);
+
 await browser.close();
+
+// Clean up the post this run created so re-runs stay idempotent. The blog
+// dir is deterministic relative to this script; only our fixed test slug is
+// touched. Uploaded e2e images are left to the caller (dot-temp-free).
+try {
+  const { unlink, readdir } = await import("node:fs/promises");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const blogDir = join(here, "..", "..", "src", "content", "blog");
+  const imagesDir = join(here, "..", "..", "public", "images");
+  await unlink(join(blogDir, `${SAVE_SLUG}.md`)).catch(() => {});
+  for (const f of await readdir(imagesDir).catch(() => [])) {
+    if (/^(e2e-photo|roundtrip)-[0-9a-f]+\.png$/.test(f))
+      await unlink(join(imagesDir, f)).catch(() => {});
+  }
+} catch {
+  /* cleanup is best-effort */
+}
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} browser checks passed`);
 process.exit(failed.length ? 1 : 0);
