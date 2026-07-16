@@ -31,7 +31,12 @@ import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight";
 import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
 import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
-import { TOOLBAR_ITEMS, CODE_LANGUAGES, languageMatches } from "./editor-config.mjs";
+import {
+  TOOLBAR_ITEMS,
+  CODE_LANGUAGES,
+  languageMatches,
+  languageKeyAction,
+} from "./editor-config.mjs";
 
 // The plugin builds its language list from Object.keys(highlighter.languages)
 // and calls highlighter.highlight(code, grammar, lang) / .tokenize(code,
@@ -198,30 +203,30 @@ document.addEventListener(
     if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
       return;
     }
-    if (input.value.trim() === "") return; // no filter active → plugin handles it
-    if (!["ArrowDown", "ArrowUp", "Enter", "Tab"].includes(ev.key)) return;
-    const list = languageListFor(input);
-    if (!list) return;
-    const visible = [...list.querySelectorAll("button")].filter(
-      (b) => b.style.display !== "none",
-    );
-    if (visible.length === 0) return;
+    const list = input.value.trim() === "" ? null : languageListFor(input);
+    const visible = list
+      ? [...list.querySelectorAll("button")].filter((b) => b.style.display !== "none")
+      : [];
+    const action = languageKeyAction(ev.key, !!list, visible.length);
+    if (action === "passthrough") return; // let the plugin handle it
+    // Own this key: block the plugin (which would navigate/commit its full,
+    // unfiltered button array — including hidden non-matches or the raw query).
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    if (ev.key === "Enter" || ev.key === "Tab") {
+    if (action === "suppress") return; // query active but nothing matches: no-op
+    if (action === "commit") {
       const chosen = visible.find((b) => b.classList.contains("active")) || visible[0];
       // The plugin commits via a delegated mousedown on the list buttons.
       chosen.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       return;
     }
-    // Arrow: move the highlight among visible matches only (don't overwrite the
-    // query text — Enter commits whichever match is highlighted, else the first).
+    // "down"/"up": move the single highlight among visible matches only (don't
+    // overwrite the query text). Clear ALL buttons first — a hidden one may
+    // retain the plugin's on-open highlight.
     const current = visible.findIndex((b) => b.classList.contains("active"));
-    let next = ev.key === "ArrowDown" ? current + 1 : current - 1;
+    let next = action === "down" ? current + 1 : current - 1;
     if (next >= visible.length) next = 0;
     if (next < 0) next = visible.length - 1;
-    // Clear ALL buttons (a hidden one may retain the plugin's on-open highlight),
-    // then highlight only the chosen visible match.
     for (const b of list.querySelectorAll("button")) b.classList.remove("active");
     visible[next].classList.add("active");
   },

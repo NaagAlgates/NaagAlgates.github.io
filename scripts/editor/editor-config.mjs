@@ -82,6 +82,30 @@ export function languageMatches(lang, query) {
 }
 
 /**
+ * Decide how a keydown on the language-picker input should be handled while
+ * type-to-search filtering is active. Pure decision logic (shared with tests)
+ * so the tricky no-match case has coverage. The DOM handler in client.mjs then
+ * carries out the action.
+ *   - "passthrough": let the plugin handle it (no active query, or not a
+ *     navigation/commit key — e.g. a character keystroke).
+ *   - "suppress": a query is active but nothing matches — block the plugin so
+ *     it can't commit the raw query or navigate hidden buttons; do nothing.
+ *   - "commit": commit the highlighted/first visible match.
+ *   - "down"/"up": move the highlight among visible matches.
+ * @param {string} key  KeyboardEvent.key
+ * @param {boolean} hasQuery  is a (non-empty) filter query active?
+ * @param {number} visibleCount  number of currently-visible matches
+ * @returns {"passthrough"|"suppress"|"commit"|"down"|"up"}
+ */
+export function languageKeyAction(key, hasQuery, visibleCount) {
+  if (!hasQuery) return "passthrough";
+  if (!["ArrowDown", "ArrowUp", "Enter", "Tab"].includes(key)) return "passthrough";
+  if (visibleCount <= 0) return "suppress";
+  if (key === "Enter" || key === "Tab") return "commit";
+  return key === "ArrowDown" ? "down" : "up";
+}
+
+/**
  * Vite `optimizeDeps.include` for the editor client. Every bundled specifier
  * the client imports must be listed here, or Vite discovers the un-listed ones
  * on first /_editor load and triggers a mid-session re-optimization reload

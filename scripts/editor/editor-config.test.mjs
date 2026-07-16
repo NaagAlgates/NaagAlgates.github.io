@@ -15,6 +15,7 @@ import {
   PRISM_COMPONENT_LANGUAGES,
   editorOptimizeDepsInclude,
   languageMatches,
+  languageKeyAction,
 } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -157,6 +158,27 @@ test("languageMatches: the type-to-search filter predicate", () => {
   assert.ok(!jHits.includes("python"));
 });
 
+test("languageKeyAction: keyboard nav stays within visible matches while filtering", () => {
+  // No active query → the plugin handles everything.
+  assert.equal(languageKeyAction("Enter", false, 5), "passthrough");
+  assert.equal(languageKeyAction("ArrowDown", false, 5), "passthrough");
+  // Active query, but a character key is not ours.
+  assert.equal(languageKeyAction("a", true, 3), "passthrough");
+  // Active query with matches: we own navigation/commit.
+  assert.equal(languageKeyAction("ArrowDown", true, 3), "down");
+  assert.equal(languageKeyAction("ArrowUp", true, 3), "up");
+  assert.equal(languageKeyAction("Enter", true, 3), "commit");
+  assert.equal(languageKeyAction("Tab", true, 3), "commit");
+  // Active query with ZERO matches: suppress (never let the plugin commit the
+  // raw query or navigate hidden buttons) — this is the round-3 bug fix.
+  assert.equal(languageKeyAction("Enter", true, 0), "suppress");
+  assert.equal(languageKeyAction("Tab", true, 0), "suppress");
+  assert.equal(languageKeyAction("ArrowDown", true, 0), "suppress");
+  assert.equal(languageKeyAction("ArrowUp", true, 0), "suppress");
+  // A character key with zero matches still passes through (user keeps editing).
+  assert.equal(languageKeyAction("x", true, 0), "passthrough");
+});
+
 test("client.mjs wires type-to-search for the language picker", () => {
   const client = readFileSync(join(HERE, "client.mjs"), "utf8");
   // The plugin has no filter (typing hides its list); we add type-to-search
@@ -190,6 +212,7 @@ test("client.mjs wires type-to-search for the language picker", () => {
     "capture-phase keydown handler owns Arrow/Enter/Tab during filtering",
   );
   assert.match(client, /stopImmediatePropagation/, "suppresses the plugin's own key handling");
+  assert.match(client, /languageKeyAction/, "uses the shared, tested key-decision helper");
 });
 
 test("optimizeDeps.include pre-bundles every client import (no first-load reload)", () => {
