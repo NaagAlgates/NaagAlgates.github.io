@@ -35,6 +35,7 @@ export function editorPageHtml({ clientSrc }) {
 <label for="tags">Tags (comma-separated, optional)</label>
 <input id="tags" placeholder="tech, ai">
 <div id="editor"></div>
+<div class="hint">Code: use the <strong>Code Block</strong> button (2nd toolbar group), then click the block's top-right corner to pick a language (or type <code>&#96;&#96;&#96;lang</code> in the Markdown tab).</div>
 <button id="save">Save post</button>
 <button id="reset" type="button" style="background:#666; margin-left:10px;">Start a new post</button>
 <div id="status"></div>

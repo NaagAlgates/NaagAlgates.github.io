@@ -22,7 +22,18 @@ export default function localBlogEditor() {
           // Pre-bundle the editor at server start so the first /_editor load
           // doesn't trigger a mid-session dep-optimization reload.
           updateConfig({
-            vite: { optimizeDeps: { include: ["@toast-ui/editor"] } },
+            vite: {
+              optimizeDeps: {
+                // Pre-bundle the exact specifiers the client imports (the
+                // plugin is imported by its `dist/...-all.js` subpath, so name
+                // that subpath, not the package root) — avoids a first-load
+                // dep re-optimization reload on /_editor.
+                include: [
+                  "@toast-ui/editor",
+                  "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight-all.js",
+                ],
+              },
+            },
           });
         }
       },

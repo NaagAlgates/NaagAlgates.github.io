@@ -3,8 +3,17 @@
 // prosemirror dependencies from node_modules — no CDN, dev only.
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
+// Syntax-highlight plugin (issue #48, mechanism 2): colours code blocks inside
+// the WYSIWYG editor and upgrades the per-block language control to a
+// filterable list, so an authored code block resembles the published (Shiki)
+// result. The `-all` bundle embeds Prism + every language (incl. kotlin);
+// dev-only, so bundle size is irrelevant.
+import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight-all.js";
+import "prismjs/themes/prism.css";
+import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
 import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
+import { TOOLBAR_ITEMS } from "./editor-config.mjs";
 
 /** Every WYSIWYG-lossy construct the markdown contains, or null — the
  * warning must name ALL of them, or the unnamed one is silently lost. */
@@ -50,6 +59,12 @@ const editor = new Editor({
   initialEditType: "wysiwyg",
   previewStyle: "vertical",
   usageStatistics: false,
+  // Explicit toolbar (see editor-config.mjs): code group promoted out of the
+  // overflow-prone trailing position so the code-block button stays visible on
+  // narrow/zoomed windows (issue #48, mechanism 1).
+  toolbarItems: TOOLBAR_ITEMS,
+  // Syntax highlighting + language picker for code blocks (issue #48, mech. 2).
+  plugins: [codeSyntaxHighlight],
   // Toast UI's dist bundle embeds DOMPurify 2.3.3 (known mXSS / prototype-
   // pollution bypasses) and calls it internally on some WYSIWYG parsing
   // paths this hook does not intercept. This hook routes the render/preview

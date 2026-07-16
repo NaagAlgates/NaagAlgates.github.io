@@ -116,6 +116,10 @@ npm run dev      # http://localhost:4321
 Markdown supports headings, **bold**, lists, links, images (remote URLs are fine),
 and fenced code blocks ` ```lang ` which get syntax highlighting automatically.
 
+In the local editor (`/_editor`), add code with the **Code Block** toolbar button
+(2nd group), then click the block's **top-right corner** to pick a language — or
+switch to the **Markdown** tab and type ` ```lang ` directly.
+
 ## New posts and the chat widget
 
 You don't need to do anything extra for the "ask the blog" chat widget — **new
