@@ -3,17 +3,49 @@
 // prosemirror dependencies from node_modules — no CDN, dev only.
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
-// Syntax-highlight plugin (issue #48, mechanism 2): colours code blocks inside
-// the WYSIWYG editor and upgrades the per-block language control to a
-// filterable list, so an authored code block resembles the published (Shiki)
-// result. The `-all` bundle embeds Prism + every language (incl. kotlin);
-// dev-only, so bundle size is irrelevant.
-import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight-all.js";
+// Syntax-highlight plugin (issue #48, mechanism 2): adds in-editor Prism
+// colouring and a short language list you open and click. We use the BASE
+// bundle with our OWN Prism (not the `-all` bundle) so the picker offers only
+// the curated CODE_LANGUAGES — the plugin's language box is not a type-to-
+// search combobox (typing hides its list), so a full 303-language list is
+// unusable; a short click-list is. Import Prism core first, then a component
+// per non-core language (dependency order: c before cpp; core javascript
+// before typescript).
+import Prism from "prismjs";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-dart";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-kotlin";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-yaml";
 import "prismjs/themes/prism.css";
+import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight";
 import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
 import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
-import { TOOLBAR_ITEMS } from "./editor-config.mjs";
+import { TOOLBAR_ITEMS, CODE_LANGUAGES } from "./editor-config.mjs";
+
+// The plugin builds its language list from Object.keys(highlighter.languages)
+// and calls highlighter.highlight(code, grammar, lang) / .tokenize(code,
+// grammar) with the grammar passed explicitly. Passing a wrapper whose own
+// `languages` is just the curated set yields an EXACT curated picker (no Prism
+// aliases like html/js/ts/dotnet leak in), while inherited highlight/tokenize
+// keep real colouring for those grammars.
+const curatedHighlighter = Object.create(Prism);
+curatedHighlighter.languages = Object.fromEntries(
+  CODE_LANGUAGES.filter((lang) => Prism.languages[lang]).map((lang) => [
+    lang,
+    Prism.languages[lang],
+  ]),
+);
 
 /** Every WYSIWYG-lossy construct the markdown contains, or null — the
  * warning must name ALL of them, or the unnamed one is silently lost. */
@@ -63,8 +95,8 @@ const editor = new Editor({
   // overflow-prone trailing position so the code-block button stays visible on
   // narrow/zoomed windows (issue #48, mechanism 1).
   toolbarItems: TOOLBAR_ITEMS,
-  // Syntax highlighting + language picker for code blocks (issue #48, mech. 2).
-  plugins: [codeSyntaxHighlight],
+  // Syntax highlighting + curated language picker for code blocks (issue #48).
+  plugins: [[codeSyntaxHighlight, { highlighter: curatedHighlighter }]],
   // Toast UI's dist bundle embeds DOMPurify 2.3.3 (known mXSS / prototype-
   // pollution bypasses) and calls it internally on some WYSIWYG parsing
   // paths this hook does not intercept. This hook routes the render/preview

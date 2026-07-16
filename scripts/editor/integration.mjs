@@ -5,6 +5,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createEditorMiddleware } from "./middleware.mjs";
+import { PRISM_COMPONENT_LANGUAGES } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BLOG_DIR = join(HERE, "..", "..", "src", "content", "blog");
@@ -24,13 +25,19 @@ export default function localBlogEditor() {
           updateConfig({
             vite: {
               optimizeDeps: {
-                // Pre-bundle EVERY bundled dep the client imports (the plugin
-                // by its exact `dist/...-all.js` subpath, not the package root)
-                // — otherwise Vite discovers the un-listed ones on first
-                // /_editor load and does a mid-session re-optimization reload.
+                // Pre-bundle EVERY bundled dep the client imports — otherwise
+                // Vite discovers the un-listed ones on first /_editor load and
+                // does a mid-session re-optimization reload. The Prism language
+                // components are generated from the shared CODE_LANGUAGES list
+                // (editor-config.mjs) so the picker, the loaded grammars, and
+                // this pre-bundle can't drift apart.
                 include: [
                   "@toast-ui/editor",
-                  "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight-all.js",
+                  "@toast-ui/editor-plugin-code-syntax-highlight",
+                  "prismjs",
+                  ...PRISM_COMPONENT_LANGUAGES.map(
+                    (lang) => `prismjs/components/prism-${lang}`,
+                  ),
                   "dompurify",
                   "mdast-util-from-markdown",
                 ],

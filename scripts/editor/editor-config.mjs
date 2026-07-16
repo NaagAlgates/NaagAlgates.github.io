@@ -25,3 +25,43 @@ export const TOOLBAR_ITEMS = [
 export const codeGroupIndex = TOOLBAR_ITEMS.findIndex(
   (group) => group.includes("code") || group.includes("codeblock"),
 );
+
+// Curated code-block languages (issue #48 follow-up). The syntax-highlight
+// plugin's language box is NOT a type-to-search combobox — typing hides its
+// list — so a full 303-language list is unusable. We instead offer a short,
+// click-friendly set. This is the single source of truth: client.mjs builds
+// the picker's language map from it, integration.mjs pre-bundles the matching
+// Prism components from it, and editor-config.test.mjs guards the three in sync.
+// Extend freely (keep it short enough to scroll-and-click). `markup` = HTML/XML.
+export const CODE_LANGUAGES = [
+  "bash",
+  "c",
+  "cpp",
+  "csharp",
+  "css",
+  "dart",
+  "go",
+  "java",
+  "javascript",
+  "json",
+  "kotlin",
+  "markup",
+  "python",
+  "rust",
+  "sql",
+  "typescript",
+  "yaml",
+];
+
+// Grammars bundled in Prism core (no `prismjs/components/prism-*` import needed).
+const PRISM_CORE = new Set(["markup", "css", "javascript"]);
+
+/**
+ * Languages that DO need a `prismjs/components/prism-<name>` import. Shared by
+ * client.mjs (static imports) and integration.mjs (optimizeDeps pre-bundle) so
+ * the picker list, the loaded grammars, and the pre-bundle stay in lockstep.
+ * @type {string[]}
+ */
+export const PRISM_COMPONENT_LANGUAGES = CODE_LANGUAGES.filter(
+  (lang) => !PRISM_CORE.has(lang),
+);

@@ -8,7 +8,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { TOOLBAR_ITEMS, codeGroupIndex } from "./editor-config.mjs";
+import {
+  TOOLBAR_ITEMS,
+  codeGroupIndex,
+  CODE_LANGUAGES,
+  PRISM_COMPONENT_LANGUAGES,
+} from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const flat = TOOLBAR_ITEMS.flat();
@@ -59,10 +64,12 @@ test("page.mjs form CSS is scoped so it can't leak into the plugin's controls", 
 
 test("client.mjs wires the code-syntax-highlight plugin and the shared toolbar", () => {
   const client = readFileSync(join(HERE, "client.mjs"), "utf8");
+  // Base plugin registered WITH a curated highlighter (issue #48 follow-up),
+  // not the bare/`-all` form.
   assert.match(
     client,
-    /plugins:\s*\[\s*codeSyntaxHighlight\s*\]/,
-    "Editor config registers plugins: [codeSyntaxHighlight]",
+    /plugins:\s*\[\s*\[\s*codeSyntaxHighlight\s*,\s*\{\s*highlighter:\s*curatedHighlighter\s*\}\s*\]\s*\]/,
+    "Editor config registers plugins: [[codeSyntaxHighlight, { highlighter: curatedHighlighter }]]",
   );
   assert.match(
     client,
@@ -71,7 +78,60 @@ test("client.mjs wires the code-syntax-highlight plugin and the shared toolbar",
   );
   assert.match(
     client,
-    /import\s+codeSyntaxHighlight\s+from\s+["']@toast-ui\/editor-plugin-code-syntax-highlight/,
-    "client imports the code-syntax-highlight plugin",
+    /import\s+codeSyntaxHighlight\s+from\s+["']@toast-ui\/editor-plugin-code-syntax-highlight["']/,
+    "client imports the BASE code-syntax-highlight plugin (not a dist subpath)",
   );
+  assert.doesNotMatch(
+    client,
+    /code-syntax-highlight-all/,
+    "client must NOT use the -all bundle (that gives the unusable 303-language list)",
+  );
+});
+
+test("CODE_LANGUAGES is a curated, click-usable short list", () => {
+  assert.ok(Array.isArray(CODE_LANGUAGES));
+  assert.ok(
+    CODE_LANGUAGES.length >= 5 && CODE_LANGUAGES.length <= 25,
+    `curated list should be short (got ${CODE_LANGUAGES.length})`,
+  );
+  for (const common of ["python", "javascript", "kotlin"]) {
+    assert.ok(CODE_LANGUAGES.includes(common), `includes ${common}`);
+  }
+  // lowercase + unique
+  assert.deepEqual(
+    CODE_LANGUAGES,
+    CODE_LANGUAGES.map((l) => l.toLowerCase()),
+    "all entries lowercase",
+  );
+  assert.equal(
+    new Set(CODE_LANGUAGES).size,
+    CODE_LANGUAGES.length,
+    "no duplicate languages",
+  );
+});
+
+test("every non-core curated language has a matching Prism component import", () => {
+  const client = readFileSync(join(HERE, "client.mjs"), "utf8");
+  // Guards list<->import drift: a language offered in the picker with no grammar
+  // loaded would be uncoloured and could distort the picker count.
+  for (const lang of PRISM_COMPONENT_LANGUAGES) {
+    assert.match(
+      client,
+      new RegExp(`prismjs/components/prism-${lang}(["'])`),
+      `client.mjs imports prismjs/components/prism-${lang}`,
+    );
+  }
+  // Core-only grammars must NOT get a redundant component import.
+  for (const core of ["markup", "css", "javascript"]) {
+    assert.doesNotMatch(
+      client,
+      new RegExp(`prismjs/components/prism-${core}["']`),
+      `no redundant component import for core grammar ${core}`,
+    );
+  }
+});
+
+test("no false 'filterable'/'searchable' claim remains in client.mjs", () => {
+  const client = readFileSync(join(HERE, "client.mjs"), "utf8");
+  assert.doesNotMatch(client, /filterable|searchable/i, "picker is not filterable; don't claim it is");
 });
