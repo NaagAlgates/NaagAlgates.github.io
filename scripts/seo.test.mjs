@@ -58,11 +58,17 @@ let wroteUpdated = false;
 let wrotePlain = false;
 let OUT = ""; // isolated temp build output dir
 
-function writeFixture(file, body, mark) {
-  if (fs.existsSync(file)) {
-    throw new Error(`refusing to clobber pre-existing ${path.relative(ROOT, file)} — remove it and re-run`);
+function writeFixture(file, body) {
+  // Exclusive create ("wx") — atomically fails if the path already exists, so a
+  // real post at this name is never clobbered (no existsSync/write TOCTOU gap).
+  try {
+    fs.writeFileSync(file, body, { flag: "wx" });
+  } catch (err) {
+    if (err.code === "EEXIST") {
+      throw new Error(`refusing to clobber pre-existing ${path.relative(ROOT, file)} — remove it and re-run`);
+    }
+    throw err;
   }
-  fs.writeFileSync(file, body);
   return true;
 }
 
@@ -103,9 +109,21 @@ function parseRobots(txt) {
   return groups;
 }
 
-// A slash-less post link: /blog/<id> NOT immediately followed by another
-// path/id char (so /blog/<id>/ and /blog/<id>-more are fine, /blog/<id>" isn't).
-const SLASHLESS = /\/blog\/[A-Za-z0-9._-]+(?![/A-Za-z0-9._-])/g;
+// Match a /blog/… URL path up to a delimiter, then require it to end in "/".
+// Charset is "anything that isn't a URL/markup delimiter", so it also covers
+// NESTED ids (/blog/a/b/ from **/*.md) and non-ASCII/Unicode ids — a flat
+// [A-Za-z0-9._-] pattern would silently miss both. The bare "/blog/" index link
+// is allowed; any deeper path that doesn't end in "/" is a slash-less offender.
+const BLOG_URL = /\/blog\/[^\s"'<>?#)&\]]*/g;
+function slashlessBlogUrls(text) {
+  const out = [];
+  for (const m of text.matchAll(BLOG_URL)) {
+    const url = m[0];
+    if (url === "/blog/") continue; // blog index, fine
+    if (!url.endsWith("/")) out.push(url);
+  }
+  return [...new Set(out)];
+}
 
 const ALLOW_UAS = [
   "Googlebot", "Bingbot", "OAI-SearchBot", "Claude-SearchBot", "PerplexityBot",
@@ -145,28 +163,32 @@ test("robots.txt has the Sitemap pointer", () => {
 
 test("robots.txt encodes the COMPLETE per-UA policy incl. Bytespider (no `*` inheritance)", () => {
   const g = parseRobots(ROBOTS);
+  // Assert each UA's EFFECTIVE policy: the intended directive present AND the
+  // opposite absent, so a contradictory group (Allow: / + Disallow: /) fails.
   for (const ua of ALLOW_UAS) {
     assert.ok(g[ua], `expected a group for ${ua}`);
     assert.ok(g[ua].includes("Allow: /"), `${ua} should Allow: /`);
+    assert.ok(!g[ua].includes("Disallow: /"), `${ua} must not also Disallow: /`);
   }
   for (const ua of DISALLOW_UAS) {
     assert.ok(g[ua], `expected a group for ${ua}`);
     assert.ok(g[ua].includes("Disallow: /"), `${ua} should Disallow: /`);
+    assert.ok(!g[ua].includes("Allow: /"), `${ua} must not also Allow: /`);
   }
 });
 
 test("no slash-less /blog/<id> URLs across ALL built HTML", () => {
   const offenders = [];
   for (const file of HTML_FILES) {
-    const hits = fs.readFileSync(file, "utf8").match(SLASHLESS);
-    if (hits) offenders.push(`${path.relative(OUT, file)}: ${[...new Set(hits)].join(", ")}`);
+    const hits = slashlessBlogUrls(fs.readFileSync(file, "utf8"));
+    if (hits.length) offenders.push(`${path.relative(OUT, file)}: ${hits.join(", ")}`);
   }
   assert.equal(offenders.length, 0, `slash-less post URLs found:\n${offenders.join("\n")}`);
 });
 
 test("no slash-less /blog/<id> URLs in rss.xml (the RSS link fix)", () => {
-  const hits = RSS.match(SLASHLESS);
-  assert.equal(hits, null, `slash-less RSS links: ${hits && [...new Set(hits)].join(", ")}`);
+  const hits = slashlessBlogUrls(RSS);
+  assert.equal(hits.length, 0, `slash-less RSS links: ${hits.join(", ")}`);
 });
 
 test("updatedDate is emitted as JSON-LD dateModified; absent when unset", () => {
@@ -192,5 +214,6 @@ test("per-post image overrides og:image; default card used otherwise", () => {
 test("/llms.txt is emitted with trailing-slash post URLs", () => {
   const llms = fs.readFileSync(path.join(OUT, "llms.txt"), "utf8");
   assert.match(llms, /# /); // has a heading
-  assert.equal(llms.match(SLASHLESS), null, "llms.txt should not contain slash-less /blog/<id> URLs");
+  const hits = slashlessBlogUrls(llms);
+  assert.equal(hits.length, 0, `llms.txt slash-less URLs: ${hits.join(", ")}`);
 });
