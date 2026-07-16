@@ -204,17 +204,21 @@ document.addEventListener(
       return;
     }
     if (input.value.trim() === "") return; // no active filter → plugin behaves normally
-    if (ev.isComposing || ev.keyCode === 229) return; // IME composition → don't interfere
-    if (ev.key === "Escape") return; // let the plugin dismiss the list on Escape
     const list = languageListFor(input);
     if (!list) return;
+    // Escape: let the plugin's own keydown dismiss the list — return BEFORE we
+    // suppress it below.
+    if (ev.key === "Escape") return;
     // A filter query is active. The plugin's keydown hides the list on ANY key
     // that isn't its own nav/commit (ArrowLeft/Right, Home, End, Shift, …), and
-    // those don't fire `input`, so the list would vanish with no re-show. So
-    // suppress the plugin's keydown for EVERY key here; we own Arrow/Enter/Tab,
-    // and other keys keep their default text behaviour (cursor, backspace) with
-    // the filtered list left intact.
+    // those don't fire `input`, so the list would vanish with no re-show. Also,
+    // during IME composition the plugin would commit the partial text on Enter.
+    // So suppress the plugin's keydown for EVERY remaining key; we own
+    // Arrow/Enter/Tab, and other keys keep their default text behaviour.
     ev.stopImmediatePropagation();
+    // IME composition: plugin now blocked (won't commit partial input); let the
+    // composition proceed via the default action (no preventDefault, no nav).
+    if (ev.isComposing || ev.keyCode === 229) return;
     const visible = [...list.querySelectorAll("button")].filter(
       (b) => b.style.display !== "none",
     );
