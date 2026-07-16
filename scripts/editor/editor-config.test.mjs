@@ -132,9 +132,26 @@ test("every non-core curated language has a matching Prism component import", ()
   }
 });
 
-test("no false 'filterable'/'searchable' claim remains in client.mjs", () => {
+test("client.mjs wires type-to-search for the language picker", () => {
   const client = readFileSync(join(HERE, "client.mjs"), "utf8");
-  assert.doesNotMatch(client, /filterable|searchable/i, "picker is not filterable; don't claim it is");
+  // The plugin has no filter (typing hides its list); we add type-to-search
+  // ourselves. Guard that wiring: a delegated input listener that targets the
+  // language input and re-shows/filters the list.
+  assert.match(
+    client,
+    /addEventListener\(\s*["']input["']/,
+    "delegated input listener present",
+  );
+  assert.match(
+    client,
+    /toastui-editor-code-block-language-input input/,
+    "listener targets the language input",
+  );
+  assert.match(
+    client,
+    /toastui-editor-code-block-language-list/,
+    "filter re-shows/narrows the language list",
+  );
 });
 
 test("optimizeDeps.include pre-bundles every client import (no first-load reload)", () => {

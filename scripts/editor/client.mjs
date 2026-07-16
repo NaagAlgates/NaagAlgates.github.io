@@ -120,6 +120,46 @@ const editor = new Editor({
 // fidelity checks and debugging.
 window.__editor = editor;
 
+// Type-to-search for the code-block language picker (issue #48 follow-up). The
+// syntax-highlight plugin has NO filter — its keydown handler HIDES the whole
+// language list on every character key — so typing to search shows nothing.
+// We add it ourselves without touching plugin internals: re-show the list on
+// `input` (keydown fires first and hides it) and narrow the language buttons to
+// substring matches, and select the input's pre-filled text on focus so the
+// first keystroke replaces it rather than appending. Event delegation on
+// document covers the boxes the plugin creates lazily per code block. The user
+// then clicks a visible suggestion (the plugin's own mousedown commits it).
+const LANG_INPUT_SELECTOR =
+  ".toastui-editor-code-block-language-input input";
+
+document.addEventListener("focusin", (ev) => {
+  const el = ev.target;
+  if (el instanceof HTMLInputElement && el.matches(LANG_INPUT_SELECTOR)) {
+    el.select();
+  }
+});
+
+document.addEventListener("input", (ev) => {
+  const input = ev.target;
+  if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
+    return;
+  }
+  const box = input.closest(".toastui-editor-code-block-language");
+  const list = box?.querySelector(".toastui-editor-code-block-language-list");
+  if (!list) return;
+  const query = input.value.trim().toLowerCase();
+  let anyVisible = false;
+  for (const button of list.querySelectorAll("button")) {
+    const lang = (button.getAttribute("data-language") || "").toLowerCase();
+    const show = query === "" || lang.includes(query);
+    button.style.display = show ? "" : "none";
+    anyVisible = anyVisible || show;
+  }
+  // Undo the plugin's per-keystroke hide (clearing the inline style reverts to
+  // the stylesheet); collapse entirely only when nothing matches.
+  list.style.display = anyVisible ? "" : "none";
+});
+
 // Toast UI's WYSIWYG model has no image-title attribute, so editing in
 // WYSIWYG mode strips `![alt](url "title")` titles (verified empirically).
 // Markdown mode preserves them byte-exact. The changeMode event fires AFTER
