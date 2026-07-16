@@ -203,21 +203,27 @@ document.addEventListener(
     if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
       return;
     }
-    const list = input.value.trim() === "" ? null : languageListFor(input);
-    const visible = list
-      ? [...list.querySelectorAll("button")].filter((b) => b.style.display !== "none")
-      : [];
-    const action = languageKeyAction(ev.key, !!list, visible.length);
-    if (action === "passthrough") return; // let the plugin handle it
-    // Own this key: block the plugin (which would navigate/commit its full,
-    // unfiltered button array — including hidden non-matches or the raw query).
-    ev.preventDefault();
+    if (input.value.trim() === "") return; // no active filter → plugin behaves normally
+    const list = languageListFor(input);
+    if (!list) return;
+    // A filter query is active. The plugin's keydown hides the list on ANY key
+    // that isn't its own nav/commit (ArrowLeft/Right, Home, End, Shift, …), and
+    // those don't fire `input`, so the list would vanish with no re-show. So
+    // suppress the plugin's keydown for EVERY key here; we own Arrow/Enter/Tab,
+    // and other keys keep their default text behaviour (cursor, backspace) with
+    // the filtered list left intact.
     ev.stopImmediatePropagation();
+    const visible = [...list.querySelectorAll("button")].filter(
+      (b) => b.style.display !== "none",
+    );
+    const action = languageKeyAction(ev.key, true, visible.length);
+    if (action === "passthrough") return; // char/cursor key: keep default action
+    ev.preventDefault();
     if (action === "suppress") return; // query active but nothing matches: no-op
     if (action === "commit") {
       const chosen = visible.find((b) => b.classList.contains("active")) || visible[0];
       // The plugin commits via a delegated mousedown on the list buttons.
-      chosen.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      chosen?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       return;
     }
     // "down"/"up": move the single highlight among visible matches only (don't
