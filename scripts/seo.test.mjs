@@ -4,13 +4,17 @@
 // a throwaway dir (never the real ./dist) so a test run can't contaminate
 // previews or a deploy with fixture pages.
 //
-// CONSTRAINT: to exercise the render paths, two throwaway fixture posts are
-// written into src/content/blog for the duration of the build (Astro's content
-// collection base is fixed to that dir). Names are per-PID unique so concurrent
-// `npm test` runs don't collide, and they're removed in the after hook. Do not
-// run a real production build (`npm run build`) in this same working tree while
-// the tests are mid-build — it would briefly see the fixtures. (CI builds run in
-// a separate clean checkout, so this only matters for a hand-run local overlap.)
+// CONSTRAINT — single build per checkout at a time: to exercise the render
+// paths, two throwaway fixture posts are written into src/content/blog for the
+// duration of the build (Astro's content collection base is fixed to that dir).
+// Names are per-PID unique and removed in the after hook, but this suite still
+// must NOT run concurrently with another `astro build` in the SAME checkout —
+// including a second `npm test` — because Astro's build state (`.astro/`, the
+// shared cache dir) is repo-local, and two overlapping builds corrupt it
+// (ENOENT on `.astro/chunks/...`). That's an Astro-level limitation on
+// concurrent same-project builds, not specific to these fixtures. CI runs each
+// job in its own clean checkout, so this only matters for a hand-run local
+// overlap; likewise don't run a real `npm run build` here mid-test.
 //
 // Covered acceptance criteria (plan .omc/plans/46-seo-completion.md, step 5):
 //  - robots.txt: Sitemap pointer + COMPLETE per-UA policy incl. `*` default,
@@ -116,6 +120,8 @@ function parseRobots(txt) {
     }
     const dir = line.match(/^(Allow|Disallow):\s*(.*)$/i);
     if (dir && current) groups[current].push(`${dir[1]}: ${dir[2]}`.trim());
+    const cs = line.match(/^Content-signal:\s*(.*)$/i);
+    if (cs && current) groups[current].push(`Content-signal: ${cs[1].trim()}`);
   }
   return groups;
 }
@@ -177,7 +183,12 @@ test("robots.txt default `*` group allows all + declares the content signals", (
   assert.ok(g["*"], "expected a default User-agent: * group");
   assert.ok(g["*"].includes("Allow: /"), "* should Allow: /");
   assert.ok(!g["*"].includes("Disallow: /"), "* must not Disallow: /");
-  assert.match(ROBOTS, /Content-signal:\s*search=yes,\s*ai-input=yes,\s*ai-train=no/);
+  // Scoped to the `*` group (via the parser), so a Content-signal line sitting
+  // in a comment or some other UA group can't satisfy this.
+  assert.ok(
+    g["*"].includes("Content-signal: search=yes, ai-input=yes, ai-train=no"),
+    "the default * group should declare the content signals",
+  );
 });
 
 test("robots.txt encodes the COMPLETE per-UA policy incl. Bytespider (no contradictions)", () => {
