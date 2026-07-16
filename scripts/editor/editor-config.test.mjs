@@ -183,6 +183,13 @@ test("client.mjs wires type-to-search for the language picker", () => {
     /addEventListener\(\s*["']focusin["']/,
     "focusin handler resets stale filter state on reopen",
   );
+  // Keyboard nav must be constrained to visible matches while filtering.
+  assert.match(
+    client,
+    /addEventListener\(\s*["']keydown["'][\s\S]*capture:\s*true/,
+    "capture-phase keydown handler owns Arrow/Enter/Tab during filtering",
+  );
+  assert.match(client, /stopImmediatePropagation/, "suppresses the plugin's own key handling");
 });
 
 test("optimizeDeps.include pre-bundles every client import (no first-load reload)", () => {

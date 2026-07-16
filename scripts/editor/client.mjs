@@ -144,10 +144,13 @@ function resetLanguageFilter(list) {
 }
 
 /** Narrow the language list to the query, keeping it visible; collapse only
- * when nothing matches. */
+ * when nothing matches. Also clears any stale highlight (the plugin may have
+ * activated a button on open) so the list starts unhighlighted each keystroke —
+ * Enter then commits the first match, or whichever the user arrows to. */
 function applyLanguageFilter(list, query) {
   let anyVisible = false;
   for (const button of list.querySelectorAll("button")) {
+    button.classList.remove("active");
     const show = languageMatches(button.getAttribute("data-language") || "", query);
     button.style.display = show ? "" : "none";
     anyVisible = anyVisible || show;
@@ -181,6 +184,49 @@ document.addEventListener("input", (ev) => {
   const list = languageListFor(input);
   if (list) applyLanguageFilter(list, input.value);
 });
+
+// While a filter query is active, own Arrow/Enter/Tab so keyboard selection
+// stays within the VISIBLE matches. The plugin navigates its full button array
+// (and Enter commits the raw typed text), so unmanaged it would highlight — and
+// commit — a hidden non-match. Capture phase runs before the plugin's own
+// keydown on the input, so stopImmediatePropagation suppresses it for just
+// these keys; character keys fall through to the plugin (then our input filter).
+document.addEventListener(
+  "keydown",
+  (ev) => {
+    const input = ev.target;
+    if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
+      return;
+    }
+    if (input.value.trim() === "") return; // no filter active → plugin handles it
+    if (!["ArrowDown", "ArrowUp", "Enter", "Tab"].includes(ev.key)) return;
+    const list = languageListFor(input);
+    if (!list) return;
+    const visible = [...list.querySelectorAll("button")].filter(
+      (b) => b.style.display !== "none",
+    );
+    if (visible.length === 0) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (ev.key === "Enter" || ev.key === "Tab") {
+      const chosen = visible.find((b) => b.classList.contains("active")) || visible[0];
+      // The plugin commits via a delegated mousedown on the list buttons.
+      chosen.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      return;
+    }
+    // Arrow: move the highlight among visible matches only (don't overwrite the
+    // query text — Enter commits whichever match is highlighted, else the first).
+    const current = visible.findIndex((b) => b.classList.contains("active"));
+    let next = ev.key === "ArrowDown" ? current + 1 : current - 1;
+    if (next >= visible.length) next = 0;
+    if (next < 0) next = visible.length - 1;
+    // Clear ALL buttons (a hidden one may retain the plugin's on-open highlight),
+    // then highlight only the chosen visible match.
+    for (const b of list.querySelectorAll("button")) b.classList.remove("active");
+    visible[next].classList.add("active");
+  },
+  { capture: true },
+);
 
 // Toast UI's WYSIWYG model has no image-title attribute, so editing in
 // WYSIWYG mode strips `![alt](url "title")` titles (verified empirically).
