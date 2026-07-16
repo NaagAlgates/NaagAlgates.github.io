@@ -71,6 +71,9 @@ Disallow: /
 User-agent: meta-externalagent
 Disallow: /
 
+User-agent: Bytespider
+Disallow: /
+
 # General-purpose corpora (feed search/research/training downstream). Blocking
 # is a deliberate policy choice and not strictly zero-cost to visibility.
 User-agent: CCBot
