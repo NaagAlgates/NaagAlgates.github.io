@@ -14,6 +14,7 @@ import {
   CODE_LANGUAGES,
   PRISM_COMPONENT_LANGUAGES,
   editorOptimizeDepsInclude,
+  languageMatches,
 } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -132,6 +133,30 @@ test("every non-core curated language has a matching Prism component import", ()
   }
 });
 
+test("languageMatches: the type-to-search filter predicate", () => {
+  // empty / whitespace query shows everything
+  for (const lang of CODE_LANGUAGES) {
+    assert.equal(languageMatches(lang, ""), true, `empty query shows ${lang}`);
+    assert.equal(languageMatches(lang, "   "), true, `blank query shows ${lang}`);
+  }
+  // substring match
+  assert.equal(languageMatches("python", "py"), true);
+  assert.equal(languageMatches("javascript", "script"), true, "matches mid-string");
+  assert.equal(languageMatches("java", "py"), false, "non-match excluded");
+  // case-insensitive both ways
+  assert.equal(languageMatches("Python", "PY"), true);
+  assert.equal(languageMatches("KOTLIN", "kot"), true);
+  // a query matching nothing in the curated set
+  assert.ok(
+    CODE_LANGUAGES.every((l) => languageMatches(l, "zzz") === false),
+    "no curated language matches 'zzz' (list would collapse)",
+  );
+  // 'j' multi-matches java/javascript/json but not python
+  const jHits = CODE_LANGUAGES.filter((l) => languageMatches(l, "j"));
+  assert.ok(jHits.includes("java") && jHits.includes("javascript") && jHits.includes("json"));
+  assert.ok(!jHits.includes("python"));
+});
+
 test("client.mjs wires type-to-search for the language picker", () => {
   const client = readFileSync(join(HERE, "client.mjs"), "utf8");
   // The plugin has no filter (typing hides its list); we add type-to-search
@@ -151,6 +176,12 @@ test("client.mjs wires type-to-search for the language picker", () => {
     client,
     /toastui-editor-code-block-language-list/,
     "filter re-shows/narrows the language list",
+  );
+  assert.match(client, /languageMatches/, "uses the shared, tested match predicate");
+  assert.match(
+    client,
+    /addEventListener\(\s*["']focusin["']/,
+    "focusin handler resets stale filter state on reopen",
   );
 });
 

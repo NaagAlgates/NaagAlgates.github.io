@@ -31,7 +31,7 @@ import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight";
 import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
 import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
-import { TOOLBAR_ITEMS, CODE_LANGUAGES } from "./editor-config.mjs";
+import { TOOLBAR_ITEMS, CODE_LANGUAGES, languageMatches } from "./editor-config.mjs";
 
 // The plugin builds its language list from Object.keys(highlighter.languages)
 // and calls highlighter.highlight(code, grammar, lang) / .tokenize(code,
@@ -132,32 +132,54 @@ window.__editor = editor;
 const LANG_INPUT_SELECTOR =
   ".toastui-editor-code-block-language-input input";
 
+/** Clear any leftover per-button display filter so a reopened box starts from
+ * the full list (the plugin reuses the same box element, and we only recompute
+ * on `input`, so stale visibility from a previous query would otherwise
+ * persist). */
+function resetLanguageFilter(list) {
+  for (const button of list.querySelectorAll("button")) {
+    button.style.display = "";
+  }
+  list.style.display = "";
+}
+
+/** Narrow the language list to the query, keeping it visible; collapse only
+ * when nothing matches. */
+function applyLanguageFilter(list, query) {
+  let anyVisible = false;
+  for (const button of list.querySelectorAll("button")) {
+    const show = languageMatches(button.getAttribute("data-language") || "", query);
+    button.style.display = show ? "" : "none";
+    anyVisible = anyVisible || show;
+  }
+  list.style.display = anyVisible ? "" : "none";
+}
+
+function languageListFor(input) {
+  return input
+    .closest(".toastui-editor-code-block-language")
+    ?.querySelector(".toastui-editor-code-block-language-list");
+}
+
+// Opening/refocusing the box: drop any stale filter and select the pre-filled
+// language so the first keystroke replaces it instead of appending.
 document.addEventListener("focusin", (ev) => {
   const el = ev.target;
-  if (el instanceof HTMLInputElement && el.matches(LANG_INPUT_SELECTOR)) {
-    el.select();
-  }
+  if (!(el instanceof HTMLInputElement) || !el.matches(LANG_INPUT_SELECTOR)) return;
+  const list = languageListFor(el);
+  if (list) resetLanguageFilter(list);
+  el.select();
 });
 
+// Typing: the plugin hid the list on keydown (fires before input); re-show it,
+// narrowed to matches, so it behaves as a filter-as-you-type search.
 document.addEventListener("input", (ev) => {
   const input = ev.target;
   if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
     return;
   }
-  const box = input.closest(".toastui-editor-code-block-language");
-  const list = box?.querySelector(".toastui-editor-code-block-language-list");
-  if (!list) return;
-  const query = input.value.trim().toLowerCase();
-  let anyVisible = false;
-  for (const button of list.querySelectorAll("button")) {
-    const lang = (button.getAttribute("data-language") || "").toLowerCase();
-    const show = query === "" || lang.includes(query);
-    button.style.display = show ? "" : "none";
-    anyVisible = anyVisible || show;
-  }
-  // Undo the plugin's per-keystroke hide (clearing the inline style reverts to
-  // the stylesheet); collapse entirely only when nothing matches.
-  list.style.display = anyVisible ? "" : "none";
+  const list = languageListFor(input);
+  if (list) applyLanguageFilter(list, input.value);
 });
 
 // Toast UI's WYSIWYG model has no image-title attribute, so editing in

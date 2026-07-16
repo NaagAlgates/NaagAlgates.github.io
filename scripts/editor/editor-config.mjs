@@ -67,6 +67,21 @@ export const PRISM_COMPONENT_LANGUAGES = CODE_LANGUAGES.filter(
 );
 
 /**
+ * Type-to-search predicate for the code-block language picker: does `lang`
+ * match the user's query? Empty/whitespace query matches everything (show the
+ * whole list); otherwise a case-insensitive substring match. Pure — shared by
+ * client.mjs's live filter and unit tests so the behaviour is covered.
+ * @param {string} lang
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function languageMatches(lang, query) {
+  const q = String(query).trim().toLowerCase();
+  if (q === "") return true;
+  return String(lang).toLowerCase().includes(q);
+}
+
+/**
  * Vite `optimizeDeps.include` for the editor client. Every bundled specifier
  * the client imports must be listed here, or Vite discovers the un-listed ones
  * on first /_editor load and triggers a mid-session re-optimization reload
