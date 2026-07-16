@@ -4,15 +4,21 @@
 // a throwaway dir (never the real ./dist) so a test run can't contaminate
 // previews or a deploy with fixture pages.
 //
+// CONSTRAINT: to exercise the render paths, two throwaway fixture posts are
+// written into src/content/blog for the duration of the build (Astro's content
+// collection base is fixed to that dir). Names are per-PID unique so concurrent
+// `npm test` runs don't collide, and they're removed in the after hook. Do not
+// run a real production build (`npm run build`) in this same working tree while
+// the tests are mid-build — it would briefly see the fixtures. (CI builds run in
+// a separate clean checkout, so this only matters for a hand-run local overlap.)
+//
 // Covered acceptance criteria (plan .omc/plans/46-seo-completion.md, step 5):
-//  - robots.txt: Sitemap pointer + COMPLETE per-UA policy incl. Bytespider (no `*` inherit)
-//  - URL consistency: zero slash-less /blog/<id> across ALL dist HTML + rss.xml (the RSS fix)
+//  - robots.txt: Sitemap pointer + COMPLETE per-UA policy incl. `*` default,
+//    Content-signal line, and Bytespider (no `*` inheritance for the bot groups)
+//  - URL consistency: zero slash-less /blog/<id> across ALL dist HTML + rss.xml
 //  - updatedDate -> dateModified (JSON-LD) path is exercised
 //  - per-post image override vs site-default og:image path is exercised
 //  - /llms.txt is emitted with trailing-slash post URLs
-//
-// Two throwaway fixture posts are written before the build and removed after.
-// The test refuses to run (rather than clobber) if those paths already exist.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -26,8 +32,11 @@ const BLOG_DIR = path.join(ROOT, "src", "content", "blog");
 const ASTRO_BIN = path.join(ROOT, "node_modules", "astro", "astro.js");
 const SITE = "https://www.nagaraj.com.au";
 
-const FIXTURE_UPDATED = path.join(BLOG_DIR, "_seo-fixture-updated.md");
-const FIXTURE_PLAIN = path.join(BLOG_DIR, "_seo-fixture-plain.md");
+// Per-PID unique slugs so two concurrent `npm test` runs never touch the same file.
+const SLUG_UPDATED = `_seo-fixture-updated-${process.pid}`;
+const SLUG_PLAIN = `_seo-fixture-plain-${process.pid}`;
+const FIXTURE_UPDATED = path.join(BLOG_DIR, `${SLUG_UPDATED}.md`);
+const FIXTURE_PLAIN = path.join(BLOG_DIR, `${SLUG_PLAIN}.md`);
 const OVERRIDE_IMAGE = "/images/_seo-fixture-card.png";
 
 const UPDATED_MD = `---
@@ -52,10 +61,11 @@ tags: [seotest]
 Fixture body — plain.
 `;
 
-// Refuse to overwrite anything we didn't create; only these two files, once
-// written by us, are ours to remove.
-let wroteUpdated = false;
-let wrotePlain = false;
+const FIXTURES = [
+  [FIXTURE_UPDATED, UPDATED_MD],
+  [FIXTURE_PLAIN, PLAIN_MD],
+];
+
 let OUT = ""; // isolated temp build output dir
 
 function writeFixture(file, body) {
@@ -69,13 +79,14 @@ function writeFixture(file, body) {
     }
     throw err;
   }
-  return true;
 }
 
 function cleanup() {
-  if (wroteUpdated && fs.existsSync(FIXTURE_UPDATED)) fs.rmSync(FIXTURE_UPDATED);
-  if (wrotePlain && fs.existsSync(FIXTURE_PLAIN)) fs.rmSync(FIXTURE_PLAIN);
-  wroteUpdated = wrotePlain = false;
+  for (const [file, body] of FIXTURES) {
+    // Only delete a fixture that still holds exactly what we wrote — never a
+    // file something else replaced it with in the meantime.
+    if (fs.existsSync(file) && fs.readFileSync(file, "utf8") === body) fs.rmSync(file);
+  }
   if (OUT && fs.existsSync(OUT)) fs.rmSync(OUT, { recursive: true, force: true });
 }
 
@@ -110,11 +121,12 @@ function parseRobots(txt) {
 }
 
 // Match a /blog/… URL path up to a delimiter, then require it to end in "/".
-// Charset is "anything that isn't a URL/markup delimiter", so it also covers
+// The charset is "anything that isn't a URL/markup boundary", so it also covers
 // NESTED ids (/blog/a/b/ from **/*.md) and non-ASCII/Unicode ids — a flat
-// [A-Za-z0-9._-] pattern would silently miss both. The bare "/blog/" index link
-// is allowed; any deeper path that doesn't end in "/" is a slash-less offender.
-const BLOG_URL = /\/blog\/[^\s"'<>?#)&\]]*/g;
+// [A-Za-z0-9._-] pattern would silently miss both. `)` stays a boundary because
+// it terminates a markdown link in llms.txt; Astro slugifies `)`/`]` out of real
+// ids, so treating `)` as a boundary can't hide a real post URL here.
+const BLOG_URL = /\/blog\/[^\s"'<>?#)&]*/g;
 function slashlessBlogUrls(text) {
   const out = [];
   for (const m of text.matchAll(BLOG_URL)) {
@@ -140,8 +152,7 @@ let HTML_FILES = [];
 
 before(
   () => {
-    wroteUpdated = writeFixture(FIXTURE_UPDATED, UPDATED_MD);
-    wrotePlain = writeFixture(FIXTURE_PLAIN, PLAIN_MD);
+    for (const [file, body] of FIXTURES) writeFixture(file, body);
     OUT = fs.mkdtempSync(path.join(os.tmpdir(), "seo-dist-"));
     execFileSync(process.execPath, [ASTRO_BIN, "build", "--outDir", OUT], {
       cwd: ROOT,
@@ -161,9 +172,17 @@ test("robots.txt has the Sitemap pointer", () => {
   assert.match(ROBOTS, /^Sitemap:\s*https:\/\/www\.nagaraj\.com\.au\/sitemap-index\.xml$/m);
 });
 
-test("robots.txt encodes the COMPLETE per-UA policy incl. Bytespider (no `*` inheritance)", () => {
+test("robots.txt default `*` group allows all + declares the content signals", () => {
   const g = parseRobots(ROBOTS);
-  // Assert each UA's EFFECTIVE policy: the intended directive present AND the
+  assert.ok(g["*"], "expected a default User-agent: * group");
+  assert.ok(g["*"].includes("Allow: /"), "* should Allow: /");
+  assert.ok(!g["*"].includes("Disallow: /"), "* must not Disallow: /");
+  assert.match(ROBOTS, /Content-signal:\s*search=yes,\s*ai-input=yes,\s*ai-train=no/);
+});
+
+test("robots.txt encodes the COMPLETE per-UA policy incl. Bytespider (no contradictions)", () => {
+  const g = parseRobots(ROBOTS);
+  // Assert each UA's EFFECTIVE policy: intended directive present AND the
   // opposite absent, so a contradictory group (Allow: / + Disallow: /) fails.
   for (const ua of ALLOW_UAS) {
     assert.ok(g[ua], `expected a group for ${ua}`);
@@ -192,15 +211,15 @@ test("no slash-less /blog/<id> URLs in rss.xml (the RSS link fix)", () => {
 });
 
 test("updatedDate is emitted as JSON-LD dateModified; absent when unset", () => {
-  const updated = fs.readFileSync(path.join(OUT, "blog", "_seo-fixture-updated", "index.html"), "utf8");
-  const plain = fs.readFileSync(path.join(OUT, "blog", "_seo-fixture-plain", "index.html"), "utf8");
+  const updated = fs.readFileSync(path.join(OUT, "blog", SLUG_UPDATED, "index.html"), "utf8");
+  const plain = fs.readFileSync(path.join(OUT, "blog", SLUG_PLAIN, "index.html"), "utf8");
   assert.match(updated, /"dateModified":"2020-06-15T00:00:00\.000Z"/);
   assert.doesNotMatch(plain, /"dateModified"/);
 });
 
 test("per-post image overrides og:image; default card used otherwise", () => {
-  const updated = fs.readFileSync(path.join(OUT, "blog", "_seo-fixture-updated", "index.html"), "utf8");
-  const plain = fs.readFileSync(path.join(OUT, "blog", "_seo-fixture-plain", "index.html"), "utf8");
+  const updated = fs.readFileSync(path.join(OUT, "blog", SLUG_UPDATED, "index.html"), "utf8");
+  const plain = fs.readFileSync(path.join(OUT, "blog", SLUG_PLAIN, "index.html"), "utf8");
   assert.ok(
     updated.includes(`property="og:image" content="${SITE}${OVERRIDE_IMAGE}"`),
     "updated fixture should use its per-post image for og:image",
