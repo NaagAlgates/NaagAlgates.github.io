@@ -204,6 +204,8 @@ document.addEventListener(
       return;
     }
     if (input.value.trim() === "") return; // no active filter → plugin behaves normally
+    if (ev.isComposing || ev.keyCode === 229) return; // IME composition → don't interfere
+    if (ev.key === "Escape") return; // let the plugin dismiss the list on Escape
     const list = languageListFor(input);
     if (!list) return;
     // A filter query is active. The plugin's keydown hides the list on ANY key

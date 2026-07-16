@@ -213,6 +213,8 @@ test("client.mjs wires type-to-search for the language picker", () => {
   );
   assert.match(client, /stopImmediatePropagation/, "suppresses the plugin's own key handling");
   assert.match(client, /languageKeyAction/, "uses the shared, tested key-decision helper");
+  assert.match(client, /isComposing/, "IME composition is left alone");
+  assert.match(client, /["']Escape["']/, "Escape still dismisses the picker via the plugin");
 });
 
 test("optimizeDeps.include pre-bundles every client import (no first-load reload)", () => {
