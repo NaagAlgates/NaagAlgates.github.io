@@ -18,13 +18,23 @@ test("TOOLBAR_ITEMS exposes both code controls", () => {
   assert.ok(flat.includes("codeblock"), "'codeblock' button present");
 });
 
-test("code group is not the last group (survives trailing-end overflow)", () => {
-  assert.ok(codeGroupIndex >= 0, "a code group exists");
+test("codeblock is not in the last group (survives trailing-end overflow)", () => {
+  const lastGroup = TOOLBAR_ITEMS.length - 1;
+  // Assert on 'codeblock' SPECIFICALLY — it is the control that overflows and
+  // matters for issue #48. Checking a generic "code-or-codeblock" group index
+  // would let 'code' sit early while 'codeblock' slid into the last group.
+  const codeblockGroup = TOOLBAR_ITEMS.findIndex((g) => g.includes("codeblock"));
+  assert.ok(codeblockGroup >= 0, "'codeblock' is present in some group");
   assert.notEqual(
-    codeGroupIndex,
-    TOOLBAR_ITEMS.length - 1,
-    "code group must not be the last (overflow-prone) group",
+    codeblockGroup,
+    lastGroup,
+    "'codeblock' must not be in the last (overflow-prone) group",
   );
+  // 'code' (inline) must also stay out of the last group.
+  const codeGroup = TOOLBAR_ITEMS.findIndex((g) => g.includes("code"));
+  assert.notEqual(codeGroup, lastGroup, "'code' must not be in the last group");
+  // Sanity: codeGroupIndex helper points at a non-last group too.
+  assert.ok(codeGroupIndex >= 0 && codeGroupIndex !== lastGroup);
 });
 
 test("scrollSync is preserved (no Markdown-mode toolbar regression)", () => {

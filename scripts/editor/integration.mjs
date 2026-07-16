@@ -24,13 +24,15 @@ export default function localBlogEditor() {
           updateConfig({
             vite: {
               optimizeDeps: {
-                // Pre-bundle the exact specifiers the client imports (the
-                // plugin is imported by its `dist/...-all.js` subpath, so name
-                // that subpath, not the package root) — avoids a first-load
-                // dep re-optimization reload on /_editor.
+                // Pre-bundle EVERY bundled dep the client imports (the plugin
+                // by its exact `dist/...-all.js` subpath, not the package root)
+                // — otherwise Vite discovers the un-listed ones on first
+                // /_editor load and does a mid-session re-optimization reload.
                 include: [
                   "@toast-ui/editor",
                   "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight-all.js",
+                  "dompurify",
+                  "mdast-util-from-markdown",
                 ],
               },
             },
