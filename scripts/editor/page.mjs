@@ -14,12 +14,15 @@ export function editorPageHtml({ clientSrc }) {
          margin: 24px auto; padding: 0 16px; color: #222; }
   h1 { font-size: 20px; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
-  input { width: 100%; padding: 8px; font-size: 14px; border: 1px solid #bbb;
-          border-radius: 6px; box-sizing: border-box; }
+  /* Scope form styling to this page's own controls so it never leaks into the
+     editor/plugin internals (the code-syntax-highlight plugin renders its own
+     <input> and language <button> list — issue #48). */
+  #title, #description, #tags { width: 100%; padding: 8px; font-size: 14px;
+          border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; }
   #editor { margin-top: 14px; }
-  button { margin-top: 16px; padding: 10px 22px; font-size: 15px; border: 0;
+  #save, #reset { margin-top: 16px; padding: 10px 22px; font-size: 15px; border: 0;
            border-radius: 6px; background: #1a7f37; color: #fff; cursor: pointer; }
-  button:disabled { background: #999; }
+  #save:disabled { background: #999; }
   #status { margin-top: 12px; font-size: 14px; white-space: pre-wrap; }
   #status.ok { color: #1a7f37; } #status.err { color: #b42318; }
   .hint { color: #666; font-size: 12px; margin-top: 2px; }
@@ -35,6 +38,7 @@ export function editorPageHtml({ clientSrc }) {
 <label for="tags">Tags (comma-separated, optional)</label>
 <input id="tags" placeholder="tech, ai">
 <div id="editor"></div>
+<div class="hint">Code: use the <strong>Code Block</strong> button (2nd toolbar group), then click the block's top-right corner, type to filter the language list, and click a match (or press Enter) — or type <code>&#96;&#96;&#96;lang</code> in the Markdown tab.</div>
 <button id="save">Save post</button>
 <button id="reset" type="button" style="background:#666; margin-left:10px;">Start a new post</button>
 <div id="status"></div>

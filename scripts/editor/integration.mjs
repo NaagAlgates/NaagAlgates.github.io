@@ -5,6 +5,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createEditorMiddleware } from "./middleware.mjs";
+import { editorOptimizeDepsInclude } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BLOG_DIR = join(HERE, "..", "..", "src", "content", "blog");
@@ -22,7 +23,17 @@ export default function localBlogEditor() {
           // Pre-bundle the editor at server start so the first /_editor load
           // doesn't trigger a mid-session dep-optimization reload.
           updateConfig({
-            vite: { optimizeDeps: { include: ["@toast-ui/editor"] } },
+            vite: {
+              optimizeDeps: {
+                // Pre-bundle EVERY bundled dep the client imports — otherwise
+                // Vite discovers the un-listed ones on first /_editor load and
+                // does a mid-session re-optimization reload. The list (incl. the
+                // Prism language components) is built from the shared language
+                // config in editor-config.mjs and is unit-tested there, so the
+                // picker, the loaded grammars, and this pre-bundle can't drift.
+                include: editorOptimizeDepsInclude(),
+              },
+            },
           });
         }
       },

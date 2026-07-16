@@ -3,8 +3,54 @@
 // prosemirror dependencies from node_modules — no CDN, dev only.
 import Editor from "@toast-ui/editor";
 import "@toast-ui/editor/dist/toastui-editor.css";
+// Syntax-highlight plugin (issue #48, mechanism 2): adds in-editor Prism
+// colouring and a short language list you open and click. We use the BASE
+// bundle with our OWN Prism (not the `-all` bundle) so the picker offers only
+// the curated CODE_LANGUAGES — the plugin's language box is not a type-to-
+// search combobox (typing hides its list), so a full 303-language list is
+// unusable; a short click-list is. Import Prism core first, then a component
+// per non-core language (dependency order: c before cpp; core javascript
+// before typescript).
+import Prism from "prismjs";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-dart";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-kotlin";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-yaml";
+import "prismjs/themes/prism.css";
+import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight";
+import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
 import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
+import {
+  TOOLBAR_ITEMS,
+  CODE_LANGUAGES,
+  languageMatches,
+  languageKeyAction,
+} from "./editor-config.mjs";
+
+// The plugin builds its language list from Object.keys(highlighter.languages)
+// and calls highlighter.highlight(code, grammar, lang) / .tokenize(code,
+// grammar) with the grammar passed explicitly. Passing a wrapper whose own
+// `languages` is just the curated set yields an EXACT curated picker (no Prism
+// aliases like html/js/ts/dotnet leak in), while inherited highlight/tokenize
+// keep real colouring for those grammars.
+const curatedHighlighter = Object.create(Prism);
+curatedHighlighter.languages = Object.fromEntries(
+  CODE_LANGUAGES.filter((lang) => Prism.languages[lang]).map((lang) => [
+    lang,
+    Prism.languages[lang],
+  ]),
+);
 
 /** Every WYSIWYG-lossy construct the markdown contains, or null — the
  * warning must name ALL of them, or the unnamed one is silently lost. */
@@ -50,6 +96,12 @@ const editor = new Editor({
   initialEditType: "wysiwyg",
   previewStyle: "vertical",
   usageStatistics: false,
+  // Explicit toolbar (see editor-config.mjs): code group promoted out of the
+  // overflow-prone trailing position so the code-block button stays visible on
+  // narrow/zoomed windows (issue #48, mechanism 1).
+  toolbarItems: TOOLBAR_ITEMS,
+  // Syntax highlighting + curated language picker for code blocks (issue #48).
+  plugins: [[codeSyntaxHighlight, { highlighter: curatedHighlighter }]],
   // Toast UI's dist bundle embeds DOMPurify 2.3.3 (known mXSS / prototype-
   // pollution bypasses) and calls it internally on some WYSIWYG parsing
   // paths this hook does not intercept. This hook routes the render/preview
@@ -72,6 +124,126 @@ const editor = new Editor({
 // Dev-only page; exposing the instance makes the editor scriptable for
 // fidelity checks and debugging.
 window.__editor = editor;
+
+// Type-to-search for the code-block language picker (issue #48 follow-up). The
+// syntax-highlight plugin has NO filter — its keydown handler HIDES the whole
+// language list on every character key — so typing to search shows nothing.
+// We add it ourselves without touching plugin internals: re-show the list on
+// `input` (keydown fires first and hides it) and narrow the language buttons to
+// substring matches, and select the input's pre-filled text on focus so the
+// first keystroke replaces it rather than appending. Event delegation on
+// document covers the boxes the plugin creates lazily per code block. The user
+// then clicks a visible suggestion (the plugin's own mousedown commits it).
+const LANG_INPUT_SELECTOR =
+  ".toastui-editor-code-block-language-input input";
+
+/** Clear any leftover per-button display filter so a reopened box starts from
+ * the full list (the plugin reuses the same box element, and we only recompute
+ * on `input`, so stale visibility from a previous query would otherwise
+ * persist). */
+function resetLanguageFilter(list) {
+  for (const button of list.querySelectorAll("button")) {
+    button.style.display = "";
+  }
+  list.style.display = "";
+}
+
+/** Narrow the language list to the query, keeping it visible; collapse only
+ * when nothing matches. Also clears any stale highlight (the plugin may have
+ * activated a button on open) so the list starts unhighlighted each keystroke —
+ * Enter then commits the first match, or whichever the user arrows to. */
+function applyLanguageFilter(list, query) {
+  let anyVisible = false;
+  for (const button of list.querySelectorAll("button")) {
+    button.classList.remove("active");
+    const show = languageMatches(button.getAttribute("data-language") || "", query);
+    button.style.display = show ? "" : "none";
+    anyVisible = anyVisible || show;
+  }
+  list.style.display = anyVisible ? "" : "none";
+}
+
+function languageListFor(input) {
+  return input
+    .closest(".toastui-editor-code-block-language")
+    ?.querySelector(".toastui-editor-code-block-language-list");
+}
+
+// Opening/refocusing the box: drop any stale filter and select the pre-filled
+// language so the first keystroke replaces it instead of appending.
+document.addEventListener("focusin", (ev) => {
+  const el = ev.target;
+  if (!(el instanceof HTMLInputElement) || !el.matches(LANG_INPUT_SELECTOR)) return;
+  const list = languageListFor(el);
+  if (list) resetLanguageFilter(list);
+  el.select();
+});
+
+// Typing: the plugin hid the list on keydown (fires before input); re-show it,
+// narrowed to matches, so it behaves as a filter-as-you-type search.
+document.addEventListener("input", (ev) => {
+  const input = ev.target;
+  if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
+    return;
+  }
+  const list = languageListFor(input);
+  if (list) applyLanguageFilter(list, input.value);
+});
+
+// While a filter query is active, own Arrow/Enter/Tab so keyboard selection
+// stays within the VISIBLE matches. The plugin navigates its full button array
+// (and Enter commits the raw typed text), so unmanaged it would highlight — and
+// commit — a hidden non-match. Capture phase runs before the plugin's own
+// keydown on the input, so stopImmediatePropagation suppresses it for just
+// these keys; character keys fall through to the plugin (then our input filter).
+document.addEventListener(
+  "keydown",
+  (ev) => {
+    const input = ev.target;
+    if (!(input instanceof HTMLInputElement) || !input.matches(LANG_INPUT_SELECTOR)) {
+      return;
+    }
+    if (input.value.trim() === "") return; // no active filter → plugin behaves normally
+    const list = languageListFor(input);
+    if (!list) return;
+    // Escape: let the plugin's own keydown dismiss the list — return BEFORE we
+    // suppress it below.
+    if (ev.key === "Escape") return;
+    // A filter query is active. The plugin's keydown hides the list on ANY key
+    // that isn't its own nav/commit (ArrowLeft/Right, Home, End, Shift, …), and
+    // those don't fire `input`, so the list would vanish with no re-show. Also,
+    // during IME composition the plugin would commit the partial text on Enter.
+    // So suppress the plugin's keydown for EVERY remaining key; we own
+    // Arrow/Enter/Tab, and other keys keep their default text behaviour.
+    ev.stopImmediatePropagation();
+    // IME composition: plugin now blocked (won't commit partial input); let the
+    // composition proceed via the default action (no preventDefault, no nav).
+    if (ev.isComposing || ev.keyCode === 229) return;
+    const visible = [...list.querySelectorAll("button")].filter(
+      (b) => b.style.display !== "none",
+    );
+    const action = languageKeyAction(ev.key, true, visible.length);
+    if (action === "passthrough") return; // char/cursor key: keep default action
+    ev.preventDefault();
+    if (action === "suppress") return; // query active but nothing matches: no-op
+    if (action === "commit") {
+      const chosen = visible.find((b) => b.classList.contains("active")) || visible[0];
+      // The plugin commits via a delegated mousedown on the list buttons.
+      chosen?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      return;
+    }
+    // "down"/"up": move the single highlight among visible matches only (don't
+    // overwrite the query text). Clear ALL buttons first — a hidden one may
+    // retain the plugin's on-open highlight.
+    const current = visible.findIndex((b) => b.classList.contains("active"));
+    let next = action === "down" ? current + 1 : current - 1;
+    if (next >= visible.length) next = 0;
+    if (next < 0) next = visible.length - 1;
+    for (const b of list.querySelectorAll("button")) b.classList.remove("active");
+    visible[next].classList.add("active");
+  },
+  { capture: true },
+);
 
 // Toast UI's WYSIWYG model has no image-title attribute, so editing in
 // WYSIWYG mode strips `![alt](url "title")` titles (verified empirically).

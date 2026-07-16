@@ -21,7 +21,9 @@
   },
   "devDependencies": {
     "@toast-ui/editor": "^3.2.2",
+    "@toast-ui/editor-plugin-code-syntax-highlight": "3.1.0",
     "dompurify": "^3.4.12",
-    "mdast-util-from-markdown": "^2.0.3"
+    "mdast-util-from-markdown": "^2.0.3",
+    "prismjs": "^1.30.0"
   }
 }
