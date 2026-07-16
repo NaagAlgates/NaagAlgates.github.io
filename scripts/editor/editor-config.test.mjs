@@ -41,6 +41,22 @@ test("scrollSync is preserved (no Markdown-mode toolbar regression)", () => {
   assert.ok(flat.includes("scrollSync"), "'scrollSync' toggle still present");
 });
 
+test("page.mjs renders the code-block hint and WRITING.md mirrors it (AC-7)", () => {
+  const page = readFileSync(join(HERE, "page.mjs"), "utf8");
+  assert.match(page, /Code Block/, "editor page shows the Code Block hint");
+  const writing = readFileSync(join(HERE, "..", "..", "WRITING.md"), "utf8");
+  assert.match(writing, /Code Block/, "WRITING.md mirrors the code-block note");
+});
+
+test("page.mjs form CSS is scoped so it can't leak into the plugin's controls", () => {
+  const page = readFileSync(join(HERE, "page.mjs"), "utf8");
+  // A bare `button {` / `input {` selector would restyle the plugin's language
+  // <button> list and <input> (issue #48 round-2 regression). Require the
+  // rules to be id-scoped instead.
+  assert.doesNotMatch(page, /(^|\s)button\s*\{/, "no unscoped `button {` rule");
+  assert.doesNotMatch(page, /(^|\s)input\s*\{/, "no unscoped `input {` rule");
+});
+
 test("client.mjs wires the code-syntax-highlight plugin and the shared toolbar", () => {
   const client = readFileSync(join(HERE, "client.mjs"), "utf8");
   assert.match(
