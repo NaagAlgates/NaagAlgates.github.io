@@ -65,3 +65,23 @@ const PRISM_CORE = new Set(["markup", "css", "javascript"]);
 export const PRISM_COMPONENT_LANGUAGES = CODE_LANGUAGES.filter(
   (lang) => !PRISM_CORE.has(lang),
 );
+
+/**
+ * Vite `optimizeDeps.include` for the editor client. Every bundled specifier
+ * the client imports must be listed here, or Vite discovers the un-listed ones
+ * on first /_editor load and triggers a mid-session re-optimization reload
+ * (issue #48). The Prism language components are generated from
+ * PRISM_COMPONENT_LANGUAGES so this list can't drift from what client.mjs
+ * imports. Pure strings — safe to import from node:test.
+ * @returns {string[]}
+ */
+export function editorOptimizeDepsInclude() {
+  return [
+    "@toast-ui/editor",
+    "@toast-ui/editor-plugin-code-syntax-highlight",
+    "prismjs",
+    ...PRISM_COMPONENT_LANGUAGES.map((lang) => `prismjs/components/prism-${lang}`),
+    "dompurify",
+    "mdast-util-from-markdown",
+  ];
+}

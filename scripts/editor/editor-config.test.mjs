@@ -13,6 +13,7 @@ import {
   codeGroupIndex,
   CODE_LANGUAGES,
   PRISM_COMPONENT_LANGUAGES,
+  editorOptimizeDepsInclude,
 } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -134,4 +135,39 @@ test("every non-core curated language has a matching Prism component import", ()
 test("no false 'filterable'/'searchable' claim remains in client.mjs", () => {
   const client = readFileSync(join(HERE, "client.mjs"), "utf8");
   assert.doesNotMatch(client, /filterable|searchable/i, "picker is not filterable; don't claim it is");
+});
+
+test("optimizeDeps.include pre-bundles every client import (no first-load reload)", () => {
+  // AC-6: the generated prebundle list must cover every bundled specifier the
+  // client imports, or Vite re-optimizes on first /_editor load and reloads.
+  const include = editorOptimizeDepsInclude();
+  for (const required of [
+    "@toast-ui/editor",
+    "@toast-ui/editor-plugin-code-syntax-highlight",
+    "prismjs",
+    "dompurify",
+    "mdast-util-from-markdown",
+  ]) {
+    assert.ok(include.includes(required), `include lists ${required}`);
+  }
+  // a component subpath for every non-core language, and no `-all` bundle
+  for (const lang of PRISM_COMPONENT_LANGUAGES) {
+    assert.ok(
+      include.includes(`prismjs/components/prism-${lang}`),
+      `include pre-bundles prismjs/components/prism-${lang}`,
+    );
+  }
+  assert.ok(
+    !include.some((e) => e.includes("code-syntax-highlight-all")),
+    "must not pre-bundle the -all bundle",
+  );
+});
+
+test("integration.mjs uses the shared optimizeDeps helper (not a hand-maintained list)", () => {
+  const integration = readFileSync(join(HERE, "integration.mjs"), "utf8");
+  assert.match(
+    integration,
+    /include:\s*editorOptimizeDepsInclude\(\)/,
+    "integration.mjs builds optimizeDeps.include from the shared, tested helper",
+  );
 });
