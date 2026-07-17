@@ -44,9 +44,9 @@ src/
   content/blog/      # posts (Markdown)
   components/        # Astro components
   layouts/           # page + post layouts
-  pages/             # routes (/, /blog/[slug], /tags/[tag], rss, 404)
+  pages/             # routes (/, /blog/[slug], /tags/[tag], rss, llms.txt, 404)
   styles/global.css  # Mono Dev theme, light/dark
   consts.ts          # site identity + SEO copy
-public/              # CNAME, .well-known, favicon (copied verbatim to dist/)
-scripts/             # new-post + (one-off) migrate-posts
+public/              # CNAME, .well-known, favicon, robots.txt, social card (copied verbatim to dist/)
+scripts/             # new-post, tests (npm test), (one-off) migrate-posts
 ```
