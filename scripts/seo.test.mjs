@@ -216,7 +216,11 @@ test("no slash-less /blog/<id> URLs across ALL built HTML", () => {
   assert.equal(offenders.length, 0, `slash-less post URLs found:\n${offenders.join("\n")}`);
 });
 
-test("no slash-less /blog/<id> URLs in rss.xml (the RSS link fix)", () => {
+test("rss.xml links posts with trailing slashes (the RSS link fix)", () => {
+  // Positive: the fixture posts actually appear as trailing-slash links, so a
+  // link-less feed can't pass the negative check below vacuously.
+  assert.ok(RSS.includes(`/blog/${SLUG_UPDATED}/`), "RSS should link the updated fixture with a trailing slash");
+  assert.ok(RSS.includes(`/blog/${SLUG_PLAIN}/`), "RSS should link the plain fixture with a trailing slash");
   const hits = slashlessBlogUrls(RSS);
   assert.equal(hits.length, 0, `slash-less RSS links: ${hits.join(", ")}`);
 });
@@ -244,6 +248,10 @@ test("per-post image overrides og:image; default card used otherwise", () => {
 test("/llms.txt is emitted with trailing-slash post URLs", () => {
   const llms = fs.readFileSync(path.join(OUT, "llms.txt"), "utf8");
   assert.match(llms, /# /); // has a heading
+  // Positive: fixture posts are actually listed (a heading-only file would
+  // otherwise pass the negative slash-less check vacuously).
+  assert.ok(llms.includes(`/blog/${SLUG_UPDATED}/`), "llms.txt should list the updated fixture with a trailing slash");
+  assert.ok(llms.includes(`/blog/${SLUG_PLAIN}/`), "llms.txt should list the plain fixture with a trailing slash");
   const hits = slashlessBlogUrls(llms);
   assert.equal(hits.length, 0, `llms.txt slash-less URLs: ${hits.join(", ")}`);
 });
