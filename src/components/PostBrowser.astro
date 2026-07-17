@@ -34,7 +34,7 @@ const { posts, pageSize = 10 } = Astro.props;
       posts.map((post) => (
         <a
           class="post-item"
-          href={`/blog/${post.id}`}
+          href={`/blog/${post.id}/`}
           data-search={`${post.data.title} ${post.data.tags.join(" ")} ${post.data.description}`.toLowerCase()}
         >
           <div class="top">

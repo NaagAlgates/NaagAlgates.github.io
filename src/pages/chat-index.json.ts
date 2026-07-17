@@ -20,7 +20,7 @@ export async function GET() {
 
   const data = posts.map((p) => ({
     title: p.data.title,
-    url: `/blog/${p.id}`,
+    url: `/blog/${p.id}/`,
     tags: p.data.tags,
     date: p.data.pubDate.toISOString().slice(0, 10),
     description: p.data.description,

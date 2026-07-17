@@ -3,6 +3,21 @@ export const SITE_TITLE = "Nagaraj";
 export const SITE_URL = "https://www.nagaraj.com.au";
 export const AUTHOR = "Nagaraj Alagusundaram";
 
+// Author identity for structured data (author.url + sameAs disambiguation).
+export const AUTHOR_URL = SITE_URL;
+export const AUTHOR_SAMEAS = [
+  "https://github.com/NaagAlgates",
+  "https://www.linkedin.com/in/nalagusundaram",
+  "https://bsky.app/profile/nagaraj.com.au",
+];
+
+// Default social-card image (used for og:image / twitter:image when a page
+// or post doesn't supply its own). Path is resolved to an absolute URL in head.
+export const OG_DEFAULT_IMAGE = "/og-default.png";
+
+// Open Graph locale for the site.
+export const OG_LOCALE = "en_AU";
+
 // Broad positioning: tech & AI, anything worth thinking through.
 export const SITE_DESCRIPTION =
   "A human-written blog about technology and AI — notes, ideas, and anything worth thinking through. 100% written by a person, never by AI.";

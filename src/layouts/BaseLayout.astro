@@ -8,14 +8,34 @@ interface Props {
   title?: string;
   description?: string;
   jsonLd?: Record<string, unknown>;
+  type?: "website" | "article";
+  image?: string;
+  publishedTime?: string;
+  tags?: string[];
 }
-const { title = SITE_TITLE, description, jsonLd } = Astro.props;
+const {
+  title = SITE_TITLE,
+  description,
+  jsonLd,
+  type,
+  image,
+  publishedTime,
+  tags,
+} = Astro.props;
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
-    <BaseHead title={title} description={description} jsonLd={jsonLd} />
+    <BaseHead
+      title={title}
+      description={description}
+      jsonLd={jsonLd}
+      type={type}
+      image={image}
+      publishedTime={publishedTime}
+      tags={tags}
+    />
   </head>
   <body>
     <div class="shell">
