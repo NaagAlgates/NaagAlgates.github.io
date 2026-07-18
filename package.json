@@ -3,6 +3,9 @@
   "type": "module",
   "version": "2.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
@@ -15,9 +18,9 @@
     "test:e2e": "node scripts/editor/editor-e2e.mjs"
   },
   "dependencies": {
-    "@astrojs/rss": "^4.0.11",
-    "@astrojs/sitemap": "^3.2.1",
-    "astro": "^5.2.5"
+    "@astrojs/rss": "4.0.19",
+    "@astrojs/sitemap": "3.7.3",
+    "astro": "7.1.1"
   },
   "devDependencies": {
     "@toast-ui/editor": "^3.2.2",
