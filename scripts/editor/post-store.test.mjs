@@ -913,3 +913,74 @@ test("adopt: a symlink swapped in after listing cannot be opened (O_NOFOLLOW)", 
   // The real content (behind the moved file) is untouched.
   assert.equal(await fsp.readFile(join(dir2, ".moved.md"), "utf8"), legacyFile());
 });
+
+test("adopt: body-only edit leaves the frontmatter block byte-identical (criterion 2)", async () => {
+  const dir = await makeDir();
+  const original = legacyFile({ title: "Stable Meta", pubDate: "2018-11-30" });
+  await fsp.writeFile(join(dir, "stable-meta.md"), original);
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+  const opened = await store.openPost(fileId);
+  const fmOf = (text) => text.split("\n---\n")[0] + "\n---\n";
+  const beforeFm = fmOf(await fsp.readFile(join(dir, "stable-meta.md"), "utf8"));
+  await store.save({
+    input: { title: opened.title, description: opened.description, tags: opened.tags, body: "A completely new body.\n" },
+    mode: "update",
+    postId: opened.postId,
+    rev: opened.rev,
+  });
+  const after = await fsp.readFile(join(dir, "stable-meta.md"), "utf8");
+  assert.equal(fmOf(after), beforeFm); // description, tags, pubDate, title bytes untouched
+  assert.match(after, /A completely new body\./);
+});
+
+test("adopt: arbitrary unknown frontmatter key refuses at open, naming the key (criterion 3)", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(
+    join(dir, "custom.md"),
+    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\ncustomField: "x"\n---\n\nB\n',
+  );
+  const store = new PostStore({ dir });
+  const [{ fileId, openable, reason }] = await store.listPosts();
+  assert.equal(openable, false);
+  assert.match(reason, /"customField"/);
+  await assert.rejects(store.openPost(fileId), /"customField"/);
+});
+
+test("adopt: explicit stale-rev and unknown-postId conflicts leave the file byte-identical (criterion 4)", async () => {
+  const dir = await makeDir();
+  const original = legacyFile({ title: "Immutable On 409" });
+  const file = join(dir, "immutable-on-409.md");
+  await fsp.writeFile(file, original);
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+  const opened = await store.openPost(fileId);
+
+  // Wrong client rev (registry and disk agree; client is stale/fabricated).
+  await assert.rejects(
+    store.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "x" },
+      mode: "update",
+      postId: opened.postId,
+      rev: sha256(Buffer.from("some other content")),
+    }),
+    /stale rev/,
+  );
+  assert.equal(await fsp.readFile(file, "utf8"), original);
+
+  // Unknown postId for an adopted-post update.
+  await assert.rejects(
+    store.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "x" },
+      mode: "update",
+      postId: "never-minted-post-id",
+      rev: opened.rev,
+    }),
+    /unknown postId/,
+  );
+  assert.equal(await fsp.readFile(file, "utf8"), original);
+
+  // Unknown fileId open attempt cannot touch anything either.
+  await assert.rejects(store.openPost("never-minted-file-id"), /unknown fileId/);
+  assert.equal(await fsp.readFile(file, "utf8"), original);
+});
