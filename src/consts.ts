@@ -20,9 +20,9 @@ export const OG_LOCALE = "en_AU";
 
 // Broad positioning: tech & AI, anything worth thinking through.
 export const SITE_DESCRIPTION =
-  "A human-written blog about technology and AI — notes, ideas, and anything worth thinking through. 100% written by a person, never by AI.";
+  "A personal, human-written blog about technology and AI — notes, ideas, and experiences that do not represent any company.";
 
-export const HUMAN_LINE = "Human-written blogs";
+export const HUMAN_LINE = "Human-made · mistakes included";
 
 // Public links shown in the sidebar (connect / contact).
 export const LINKS = [

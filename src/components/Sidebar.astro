@@ -6,38 +6,62 @@ const year = new Date().getFullYear();
 
 <aside class="sidebar">
   <div class="sidebar-inner">
-    <a class="brand-lg" href="/" aria-label={`${SITE_TITLE} — home`}>
-      <span class="prompt-sm mono">~ $ whoami</span>
-      <span class="word mono">{SITE_TITLE.toLowerCase()}<span class="cursor">▋</span></span>
-    </a>
+    <div class="side-header">
+      <a class="brand-lg" href="/" aria-label={`${SITE_TITLE} — home`}>
+        <span class="prompt-sm mono">~ $ whoami</span>
+        <span class="word mono">{SITE_TITLE.toLowerCase()}<span class="cursor">▋</span></span>
+      </a>
+      <ThemeToggle />
+    </div>
 
     <p class="side-bio">
       A human writing about <code>tech</code> and <code>AI</code> — notes, ideas,
-      and anything worth thinking through. Every post here is written by a
-      person, never by AI.
+      and anything worth thinking through. Every post here is written by
+      me. Everything here reflects my own thoughts and
+      experiences; I don’t represent or speak for any company in this blog.
     </p>
 
-    <nav class="side-links mono" aria-label="Links">
-      {
-        LINKS.map((l) => {
-          const external = l.href.startsWith("http");
-          return (
-            <a
-              href={l.href}
-              {...(external ? { target: "_blank", rel: "me noopener" } : {})}
-            >
-              {l.label}
-            </a>
-          );
-        })
-      }
-    </nav>
+    <section class="side-contact" aria-labelledby="contact-heading">
+      <h2 id="contact-heading" class="side-contact-title mono">Contact</h2>
+      <nav class="side-links" aria-label="Contact links">
+        {
+          LINKS.map((l) => {
+            const external = l.href.startsWith("http");
+            return (
+              <a
+                href={l.href}
+                aria-label={l.label === "rss" ? "RSS feed" : l.label}
+                {...(external ? { target: "_blank", rel: "me noopener" } : {})}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  {l.label === "github" && (
+                    <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.69c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 7.67a9.6 9.6 0 0 1 2.5.34c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
+                  )}
+                  {l.label === "linkedin" && (
+                    <path d="M6.5 8.5H3.2V19h3.3V8.5ZM4.85 3A1.92 1.92 0 1 0 4.84 6.84 1.92 1.92 0 0 0 4.85 3ZM19 13c0-3.16-1.69-4.63-3.94-4.63a3.41 3.41 0 0 0-3.08 1.69V8.5H8.69V19h3.29v-5.2c0-1.37.26-2.7 1.96-2.7 1.68 0 1.7 1.57 1.7 2.79V19H19v-6Z" />
+                  )}
+                  {l.label === "bluesky" && (
+                    <path d="M12 11.1C10.94 9.03 8.04 5.17 5.35 3.27 2.78 1.45 1.8 1.77 1.16 2.06.42 2.4.3 3.53.3 4.2c0 .68.37 5.53.61 6.34.79 2.72 3.61 3.65 6.2 3.35-4.54.68-8.56 2.36-3.28 8.24 5.8 6.01 7.95-1.29 8.65-2.94.13-.31.2-.45.22-.33.02-.12.09.02.22.33.7 1.65 2.85 8.95 8.65 2.94 5.28-5.88 1.26-7.56-3.28-8.24 2.59.3 5.41-.63 6.2-3.35.24-.81.61-5.66.61-6.34 0-.67-.12-1.8-.86-2.14-.64-.29-1.62-.61-4.19 1.21-2.69 1.9-5.59 5.76-6.65 7.83Z" />
+                  )}
+                  {l.label === "rss" && (
+                    <>
+                      <circle cx="5" cy="19" r="2" />
+                      <path d="M3 11a10 10 0 0 1 10 10h3A13 13 0 0 0 3 8v3Zm0-6a16 16 0 0 1 16 16h3A19 19 0 0 0 3 2v3Z" />
+                    </>
+                  )}
+                </svg>
+                <span>{l.label === "rss" ? "RSS" : l.label}</span>
+              </a>
+            );
+          })
+        }
+      </nav>
+    </section>
 
     <div class="side-tools">
-      <span class="badge" title="Every post is written by a human, never by AI.">
+      <span class="badge" title="Written by a human. Mistakes included.">
         <span class="dot"></span>{HUMAN_LINE}
       </span>
-      <ThemeToggle />
     </div>
 
     <p class="side-foot mono">© {year} {AUTHOR}</p>
