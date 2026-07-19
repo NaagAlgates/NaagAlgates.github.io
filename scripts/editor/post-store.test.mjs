@@ -484,17 +484,21 @@ test("parseFrontmatter: exact editor shape round-trips all four fields + body by
 test("parseFrontmatter: refusals — unknown/reordered keys, formats, non-canonical spellings", () => {
   const refuse = (text, why) =>
     assert.throws(() => parseFrontmatter(text), ConflictError, why);
-  // Schema-optional keys the editor doesn't model are refused, never dropped.
-  refuse(
-    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nupdatedDate: 2022-01-01\n---\n\nB\n',
-    "updatedDate",
+  // Schema-optional keys the editor doesn't model are refused, never dropped
+  // — and the refusal message NAMES the unsupported key (criterion 3).
+  assert.throws(
+    () => parseFrontmatter('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nupdatedDate: 2022-01-01\n---\n\nB\n'),
+    (err) => err instanceof ConflictError && /"updatedDate"/.test(err.message),
   );
-  refuse(
-    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nimage: "/x.png"\n---\n\nB\n',
-    "image",
+  assert.throws(
+    () => parseFrontmatter('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nimage: "/x.png"\n---\n\nB\n'),
+    (err) => err instanceof ConflictError && /"image"/.test(err.message),
   );
-  // Reordered keys.
-  refuse('---\ndescription: "D"\ntitle: "T"\npubDate: 2021-01-01\ntags: ["a"]\n---\n\nB\n');
+  // A reordered key is named too.
+  assert.throws(
+    () => parseFrontmatter('---\ndescription: "D"\ntitle: "T"\npubDate: 2021-01-01\ntags: ["a"]\n---\n\nB\n'),
+    (err) => err instanceof ConflictError && /"description"/.test(err.message),
+  );
   // Missing key (only three).
   refuse('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\n---\n\nB\n');
   // Unquoted scalar.
@@ -659,7 +663,12 @@ test("adopt: open refuses un-round-trippable and unknown-key files; listing surf
   await fsp.writeFile(join(dir, "comma-tag.md"), legacyFile({ tags: ["a,b"] }));
   await fsp.writeFile(join(dir, ".hidden.md"), legacyFile());
   await fsp.writeFile(join(dir, ".good.md.tmp"), "stale temp");
-  await fsp.writeFile(join(dir, "_ignored-by-loader.md"), legacyFile());
+  // Underscore files ARE collection members under the v5 glob loader (the
+  // seo tests build pages for them) — they must be listed and openable.
+  await fsp.writeFile(join(dir, "_underscore.md"), legacyFile({ title: "Underscore" }));
+  // Symlinked .md: outside the write model (inode identity), never listed.
+  await fsp.writeFile(join(dir, "..outside-target.md"), legacyFile());
+  await fsp.symlink(join(dir, "..outside-target.md"), join(dir, "sym-link.md"));
   await fsp.mkdir(join(dir, "series"));
   await fsp.writeFile(join(dir, "series", "nested.md"), legacyFile());
   await fsp.mkdir(join(dir, ".omc"));
@@ -669,11 +678,18 @@ test("adopt: open refuses un-round-trippable and unknown-key files; listing surf
   const posts = await store.listPosts();
   const byPath = Object.fromEntries(posts.map((p) => [p.relPath, p]));
 
-  // Dotfiles, temps, and dot-dirs never appear.
-  assert.deepEqual(Object.keys(byPath).sort(), ["comma-tag.md", "extra-key.md", "good.md", "series/nested.md"]);
+  // Dotfiles, temps, dot-dirs, and symlinks never appear; underscore files do.
+  assert.deepEqual(Object.keys(byPath).sort(), [
+    "_underscore.md",
+    "comma-tag.md",
+    "extra-key.md",
+    "good.md",
+    "series/nested.md",
+  ]);
   assert.equal(byPath["good.md"].openable, true);
+  assert.equal(byPath["_underscore.md"].openable, true);
   assert.equal(byPath["extra-key.md"].openable, false);
-  assert.match(byPath["extra-key.md"].reason, /not exactly title\/description\/pubDate\/tags/);
+  assert.match(byPath["extra-key.md"].reason, /"updatedDate"/);
   assert.equal(byPath["comma-tag.md"].openable, false);
   assert.match(byPath["comma-tag.md"].reason, /comma/);
   assert.equal(byPath["series/nested.md"].openable, false);
@@ -687,6 +703,38 @@ test("adopt: open refuses un-round-trippable and unknown-key files; listing surf
   // fileIds are stable across repeated listings.
   const again = await store.listPosts();
   assert.equal(again.find((p) => p.relPath === "good.md").fileId, byPath["good.md"].fileId);
+
+  // openPost refusal reasons are distinct per D3 case (criterion 9), not one
+  // generic message.
+  await assert.rejects(store.openPost(byPath["comma-tag.md"].fileId), /comma/);
+  await fsp.writeFile(join(dir, "multiline.md"), legacyFile({ title: "Two\nLines" }));
+  await fsp.writeFile(join(dir, "blank-desc.md"), legacyFile({ description: "   " }));
+  const withNew = await store.listPosts();
+  const idOf = (rel) => withNew.find((p) => p.relPath === rel).fileId;
+  await assert.rejects(store.openPost(idOf("multiline.md")), /multiple lines/);
+  await assert.rejects(store.openPost(idOf("blank-desc.md")), /description is blank/);
+
+  // Pruning (plan D1 rebuild semantics): a deleted file's token vanishes on
+  // the next listing and its old fileId can no longer open anything.
+  const goodId = byPath["good.md"].fileId;
+  await fsp.unlink(join(dir, "good.md"));
+  const afterDelete = await store.listPosts();
+  assert.equal(afterDelete.find((p) => p.relPath === "good.md"), undefined);
+  await assert.rejects(store.openPost(goodId), /unknown fileId/);
+});
+
+test("adopt: invalid UTF-8 refuses at open (a save would rewrite the bytes)", async () => {
+  const dir = await makeDir();
+  const good = Buffer.from(legacyFile(), "utf8");
+  const corrupt = Buffer.concat([good.subarray(0, good.length - 2), Buffer.from([0xff, 0xfe]), good.subarray(good.length - 2)]);
+  await fsp.writeFile(join(dir, "corrupt.md"), corrupt);
+  const store = new PostStore({ dir });
+  const posts = await store.listPosts();
+  assert.equal(posts[0].openable, false);
+  assert.match(posts[0].reason, /not valid UTF-8/);
+  await assert.rejects(store.openPost(posts[0].fileId), /not valid UTF-8/);
+  // Untouched on refusal.
+  assert.ok((await fsp.readFile(join(dir, "corrupt.md"))).equals(corrupt));
 });
 
 test("listing order: pubDate descending, ties by relPath, no-date entries last", async () => {
@@ -724,10 +772,21 @@ test("adopt: wysiwygUnsafe is the union of all lossy detectors", async () => {
 });
 
 test("real corpus: every current post lists as openable and parses (read-only)", async () => {
+  // Expectation derived from the directory itself (a clean checkout has 19
+  // tracked posts; a working tree may hold extra drafts). _seo-fixture-*
+  // files are transient artifacts of the concurrently-running seo tests —
+  // excluded here to keep this test deterministic under `node --test`
+  // parallelism, not because the editor excludes them.
+  const isFixture = (name) => name.startsWith("_seo-fixture-");
+  const expected = (await fsp.readdir(REAL_BLOG_DIR, { withFileTypes: true }))
+    .filter((e) => e.isFile() && e.name.endsWith(".md") && !e.name.startsWith(".") && !isFixture(e.name))
+    .map((e) => e.name)
+    .sort();
   const store = new PostStore({ dir: REAL_BLOG_DIR });
   const posts = await store.listPosts();
-  const topLevel = posts.filter((p) => !p.relPath.includes("/"));
-  assert.ok(topLevel.length >= 20, `expected >= 20 posts, saw ${topLevel.length}`);
+  const topLevel = posts.filter((p) => !p.relPath.includes("/") && !isFixture(p.relPath));
+  assert.deepEqual(topLevel.map((p) => p.relPath).sort(), expected);
+  assert.ok(topLevel.length >= 19, `expected >= 19 posts, saw ${topLevel.length}`);
   // Newest-first ordering holds over the real corpus.
   for (let i = 1; i < topLevel.length; i++) {
     assert.ok(

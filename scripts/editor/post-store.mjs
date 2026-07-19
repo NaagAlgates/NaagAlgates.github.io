@@ -136,17 +136,31 @@ export function parseFrontmatter(fileText) {
   const lines = String(fileText).split("\n");
   const fail = (why) =>
     new ConflictError(`${why} — this file is not in the editor's format; edit it directly`);
+  // Name the key actually found, so refusals for e.g. updatedDate/image say
+  // so (plan acceptance criterion 3), instead of a generic shape error.
+  const keyOf = (line) => /^([A-Za-z0-9_-]+):/.exec(line ?? "")?.[1] ?? null;
   if (lines[0] !== "---" || lines.length < 7) throw fail("unrecognized frontmatter layout");
-  if (lines[5] !== "---")
+  if (lines[5] !== "---") {
+    const extra = keyOf(lines[5]);
     throw fail(
-      "frontmatter is not exactly title/description/pubDate/tags (an extra, missing, or reordered key)",
+      extra
+        ? `frontmatter has a key the editor does not support: ${JSON.stringify(extra)}`
+        : "frontmatter is not exactly title/description/pubDate/tags (an extra, missing, or reordered key)",
     );
+  }
   // Editor-written files have a blank line between --- and the body; most
   // legacy posts don't. Both layouts are accepted, and which one the file
   // uses is preserved so a no-edit save stays byte-identical.
   const blankAfterFrontmatter = lines[6] === "";
   const take = (line, key) => {
-    if (!line.startsWith(`${key}: `)) throw fail(`expected ${key} at its fixed position`);
+    if (!line.startsWith(`${key}: `)) {
+      const found = keyOf(line);
+      throw fail(
+        found && found !== key
+          ? `expected ${key} but found ${JSON.stringify(found)} at its fixed position`
+          : `expected ${key} at its fixed position`,
+      );
+    }
     return line.slice(key.length + 2);
   };
   const title = parseCanonicalString(take(lines[1], "title"), "title");
@@ -371,7 +385,15 @@ export class PostStore {
       fh = await fsx.open(target, "r");
       const st = await fh.stat();
       const bytes = await fh.readFile();
-      const parsed = parseFrontmatter(bytes.toString("utf8"));
+      const text = bytes.toString("utf8");
+      // Decoding is permissive (invalid sequences become U+FFFD); a save
+      // would then write different bytes than were read. Refuse instead —
+      // refuse-don't-drop applies to encoding too.
+      if (!Buffer.from(text, "utf8").equals(bytes))
+        throw new ConflictError(
+          "the file is not valid UTF-8, which a save would silently rewrite — edit it directly",
+        );
+      const parsed = parseFrontmatter(text);
       return { parsed, ino: String(st.ino), rev: sha256(bytes) };
     } catch (err) {
       if (err && err.code === "ENOENT")
@@ -390,17 +412,31 @@ export class PostStore {
       for (const ent of entries) {
         const name = ent.name;
         // Dotfiles/dot-dirs (.omc state, .<name>.md.tmp temps) are never
-        // posts, and Astro's glob loader ignores underscore-prefixed files
-        // (the seo tests rely on that for their _seo-fixture-* files) — the
-        // listing mirrors the collection's own membership rules.
-        if (name.startsWith(".") || name.startsWith("_")) continue;
+        // posts — the glob loader's default matching excludes hidden files.
+        // Underscore-prefixed files ARE collection members under the v5 glob
+        // loader (the seo tests build real pages for _seo-fixture-*), so
+        // they are listed like any other post. Only regular files are
+        // eligible: the write model (inode identity, link/rename publish) is
+        // not defined over symlinks, so non-regular entries are skipped.
+        if (name.startsWith(".")) continue;
         const childRel = rel ? `${rel}/${name}` : name;
         if (ent.isDirectory()) await walk(childRel);
-        else if (name.endsWith(".md")) found.push({ relPath: childRel, nested: rel !== "" });
+        else if (ent.isFile() && name.endsWith(".md"))
+          found.push({ relPath: childRel, nested: rel !== "" });
       }
     };
     await walk("");
     found.sort((a, b) => a.relPath.localeCompare(b.relPath));
+    // Rebuild semantics (plan D1): tokens are reused for paths still present,
+    // and entries for vanished paths are pruned so the maps stay bounded by
+    // the current post count.
+    const present = new Set(found.map((f) => f.relPath));
+    for (const [relPath, id] of this.#fileIdByPath) {
+      if (!present.has(relPath)) {
+        this.#fileIdByPath.delete(relPath);
+        this.#pathByFileId.delete(id);
+      }
+    }
 
     const posts = [];
     for (const { relPath, nested } of found) {
