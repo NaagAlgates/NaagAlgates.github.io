@@ -689,6 +689,27 @@ test("adopt: open refuses un-round-trippable and unknown-key files; listing surf
   assert.equal(again.find((p) => p.relPath === "good.md").fileId, byPath["good.md"].fileId);
 });
 
+test("listing order: pubDate descending, ties by relPath, no-date entries last", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(join(dir, "old.md"), legacyFile({ pubDate: "2020-01-01" }));
+  await fsp.writeFile(join(dir, "newest.md"), legacyFile({ pubDate: "2026-07-18" }));
+  await fsp.writeFile(join(dir, "mid-b.md"), legacyFile({ pubDate: "2023-05-05" }));
+  await fsp.writeFile(join(dir, "mid-a.md"), legacyFile({ pubDate: "2023-05-05" }));
+  await fsp.writeFile(join(dir, "unparseable.md"), "# not a post\n");
+  await fsp.mkdir(join(dir, "series"));
+  await fsp.writeFile(join(dir, "series", "nested.md"), legacyFile({ pubDate: "2027-01-01" }));
+  const store = new PostStore({ dir });
+  const order = (await store.listPosts()).map((p) => p.relPath);
+  assert.deepEqual(order, [
+    "newest.md",
+    "mid-a.md",
+    "mid-b.md",
+    "old.md",
+    "series/nested.md", // no parsed pubDate (nested posts aren't read)
+    "unparseable.md",
+  ]);
+});
+
 test("adopt: wysiwygUnsafe is the union of all lossy detectors", async () => {
   const dir = await makeDir();
   await fsp.writeFile(join(dir, "iframe.md"), legacyFile({ body: '<div class="video">\n<iframe src="https://x"></iframe>\n</div>' }));
@@ -707,6 +728,13 @@ test("real corpus: every current post lists as openable and parses (read-only)",
   const posts = await store.listPosts();
   const topLevel = posts.filter((p) => !p.relPath.includes("/"));
   assert.ok(topLevel.length >= 20, `expected >= 20 posts, saw ${topLevel.length}`);
+  // Newest-first ordering holds over the real corpus.
+  for (let i = 1; i < topLevel.length; i++) {
+    assert.ok(
+      topLevel[i - 1].pubDate >= topLevel[i].pubDate,
+      `${topLevel[i - 1].relPath} (${topLevel[i - 1].pubDate}) should sort before ${topLevel[i].relPath} (${topLevel[i].pubDate})`,
+    );
+  }
   for (const post of topLevel) {
     assert.equal(post.openable, true, `${post.relPath}: ${post.reason ?? ""}`);
     const opened = await store.openPost(post.fileId);

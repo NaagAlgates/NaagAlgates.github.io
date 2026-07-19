@@ -430,6 +430,15 @@ export class PostStore {
         }
       }
     }
+    // Newest first, matching the blog index (plan v5, user request): pubDate
+    // descending — YYYY-MM-DD compares chronologically as a string — ties by
+    // relPath, entries with no parseable pubDate (refused/nested) last.
+    posts.sort((a, b) => {
+      if (a.pubDate && b.pubDate && a.pubDate !== b.pubDate)
+        return a.pubDate < b.pubDate ? 1 : -1;
+      if (Boolean(a.pubDate) !== Boolean(b.pubDate)) return a.pubDate ? -1 : 1;
+      return a.relPath.localeCompare(b.relPath);
+    });
     return posts;
   }
 
