@@ -377,12 +377,25 @@ export class PostStore {
     return id;
   }
 
+  /** Open flags that refuse to traverse a symlink at the final component —
+   * the listing only admits regular files, but the path can be swapped for a
+   * symlink between listing and open/verify (round-2 review). Falls back to
+   * plain "r" where O_NOFOLLOW doesn't exist. */
+  async #noFollowFlags() {
+    const { constants } = await import("node:fs");
+    return constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : "r";
+  }
+
+  static #isSymlinkOpenError(err) {
+    return err && (err.code === "ELOOP" || err.code === "EMLINK");
+  }
+
   /** Read + strictly parse one post; returns identity (ino/rev) with it. */
   async #readPost(fsx, relPath) {
     const { target } = this.#pathsFor(relPath);
     let fh;
     try {
-      fh = await fsx.open(target, "r");
+      fh = await fsx.open(target, await this.#noFollowFlags());
       const st = await fh.stat();
       const bytes = await fh.readFile();
       const text = bytes.toString("utf8");
@@ -398,6 +411,8 @@ export class PostStore {
     } catch (err) {
       if (err && err.code === "ENOENT")
         throw new ConflictError("the post file no longer exists on disk");
+      if (PostStore.#isSymlinkOpenError(err))
+        throw new ConflictError("the post path is a symlink, which the editor does not support");
       throw err;
     } finally {
       await fh?.close().catch(() => {});
@@ -575,7 +590,9 @@ export class PostStore {
 
     let fh;
     try {
-      fh = await fsx.open(target, "r");
+      // No-follow: a symlink swapped in at this path could otherwise pass the
+      // inode check by pointing at the original file (round-2 review).
+      fh = await fsx.open(target, await this.#noFollowFlags());
       const st = await fh.stat();
       if (String(st.ino) !== entry.ino)
         throw new ConflictError(
@@ -589,6 +606,8 @@ export class PostStore {
     } catch (err) {
       if (err && err.code === "ENOENT")
         throw new ConflictError("the post file no longer exists on disk");
+      if (PostStore.#isSymlinkOpenError(err))
+        throw new ConflictError("the post file was replaced on disk since your last save");
       throw err;
     } finally {
       await fh?.close().catch(() => {});

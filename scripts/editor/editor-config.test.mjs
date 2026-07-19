@@ -17,6 +17,7 @@ import {
   editorOptimizeDepsInclude,
   languageMatches,
   languageKeyAction,
+  opSequencer,
 } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -288,4 +289,25 @@ test("applyOpenedPost: markdown mode is established BEFORE body injection for un
   assert.equal(unsafe, false);
   assert.ok(!calls.some((c) => c.startsWith("changeMode")));
   assert.ok(calls.includes("setMarkdown"));
+});
+
+test("opSequencer: a response from before an invalidation never applies", () => {
+  const ops = opSequencer();
+  // Normal save: token captured, nothing moved, response applies.
+  let t = ops.begin();
+  assert.equal(ops.isCurrent(t), true);
+  // Save in flight, then an open (invalidate): the save response is stale.
+  t = ops.begin();
+  ops.invalidate();
+  assert.equal(ops.isCurrent(t), false);
+  // The open's own token stays current until something newer invalidates.
+  const openToken = ops.invalidate();
+  assert.equal(ops.isCurrent(openToken), true);
+  // A second open supersedes the first's in-flight response.
+  const second = ops.invalidate();
+  assert.equal(ops.isCurrent(openToken), false);
+  assert.equal(ops.isCurrent(second), true);
+  // Reset invalidates too.
+  ops.invalidate();
+  assert.equal(ops.isCurrent(second), false);
 });

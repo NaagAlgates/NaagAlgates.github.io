@@ -830,3 +830,37 @@ test("real corpus fixtures: no-edit save is byte-identical (escaped quotes, raw 
     assert.equal(after, original.replace(/\n+$/, "\n"), name);
   }
 });
+
+test("adopt: a symlink swapped in after listing cannot be opened (O_NOFOLLOW)", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(join(dir, "victim.md"), legacyFile({ title: "Victim" }));
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+  // TOCTOU: after listing (isFile passed), replace the path with a symlink.
+  await fsp.unlink(join(dir, "victim.md"));
+  await fsp.writeFile(join(dir, ".target.md"), legacyFile({ title: "Elsewhere" }));
+  await fsp.symlink(join(dir, ".target.md"), join(dir, "victim.md"));
+  await assert.rejects(store.openPost(fileId), /symlink/);
+
+  // Same guard on the update path: adopt a real file, then swap the path for
+  // a symlink pointing at the ORIGINAL inode (which would pass the ino check
+  // if the open followed it).
+  const dir2 = await makeDir();
+  await fsp.writeFile(join(dir2, "post.md"), legacyFile());
+  const store2 = new PostStore({ dir: dir2 });
+  const [{ fileId: id2 }] = await store2.listPosts();
+  const opened = await store2.openPost(id2);
+  await fsp.rename(join(dir2, "post.md"), join(dir2, ".moved.md"));
+  await fsp.symlink(join(dir2, ".moved.md"), join(dir2, "post.md"));
+  await assert.rejects(
+    store2.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "x" },
+      mode: "update",
+      postId: opened.postId,
+      rev: opened.rev,
+    }),
+    ConflictError,
+  );
+  // The real content (behind the moved file) is untouched.
+  assert.equal(await fsp.readFile(join(dir2, ".moved.md"), "utf8"), legacyFile());
+});

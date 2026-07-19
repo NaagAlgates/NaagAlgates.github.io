@@ -37,7 +37,12 @@ import {
   applyOpenedPost,
   languageMatches,
   languageKeyAction,
+  opSequencer,
 } from "./editor-config.mjs";
+
+// Guards overlapping open/save/reset: a late response must never rebind
+// postId/rev after the editor moved to a different post (see opSequencer).
+const ops = opSequencer();
 
 // The plugin builds its language list from Object.keys(highlighter.languages)
 // and calls highlighter.highlight(code, grammar, lang) / .tokenize(code,
@@ -409,7 +414,10 @@ loadPostList();
 openBtn.addEventListener("click", async () => {
   const fileId = openSelect.value;
   if (!fileId) return;
+  // Moving to a different post: invalidate any in-flight save/open response.
+  const token = ops.invalidate();
   openBtn.disabled = true;
+  saveBtn.disabled = true;
   setStatus("", "Opening…");
   try {
     const res = await fetch("/_editor/api/open", {
@@ -418,6 +426,7 @@ openBtn.addEventListener("click", async () => {
       body: JSON.stringify({ fileId }),
     });
     const data = await res.json();
+    if (!ops.isCurrent(token)) return; // superseded by a newer open/reset
     if (!res.ok) {
       setStatus("err", `Not opened: ${data.error || res.status}`);
       return;
@@ -441,15 +450,17 @@ openBtn.addEventListener("click", async () => {
           : ""),
     );
   } catch (e) {
-    setStatus("err", `Not opened: ${e}`);
+    if (ops.isCurrent(token)) setStatus("err", `Not opened: ${e}`);
   } finally {
     openBtn.disabled = false;
+    saveBtn.disabled = false;
   }
 });
 
 // Recovery path for genuinely lost ownership (e.g. dev-server restart):
 // unlink from the saved file but keep the text, so Save creates a new post.
 document.getElementById("reset").addEventListener("click", () => {
+  ops.invalidate(); // in-flight save/open responses must not rebind this draft
   postId = null;
   rev = null;
   sessionStorage.removeItem(SESSION_KEY);
@@ -461,7 +472,9 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 
 saveBtn.addEventListener("click", async () => {
+  const token = ops.begin(); // a later open/reset makes this save's response stale
   saveBtn.disabled = true;
+  openBtn.disabled = true;
   setStatus("", "Saving…");
   // Persist the draft BEFORE the request: the save triggers a content-change
   // reload that can beat the response, and the restored page re-adopts
@@ -487,6 +500,12 @@ saveBtn.addEventListener("click", async () => {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
+    if (!ops.isCurrent(token)) {
+      // The editor moved to a different post while this save was in flight;
+      // rebinding postId/rev now would make the next save hit the wrong file.
+      setStatus("err", "A save finished after you switched posts — its result was ignored. Re-open the post you want to keep editing.");
+      return;
+    }
     if (res.ok) {
       postId = data.postId;
       rev = data.rev;
@@ -507,8 +526,9 @@ saveBtn.addEventListener("click", async () => {
       setStatus("err", `Not saved: ${data.error || res.status}`);
     }
   } catch (e) {
-    setStatus("err", `Not saved: ${e}`);
+    if (ops.isCurrent(token)) setStatus("err", `Not saved: ${e}`);
   } finally {
     saveBtn.disabled = false;
+    openBtn.disabled = false;
   }
 });

@@ -131,6 +131,25 @@ export function applyOpenedPost(editorApi, post) {
 }
 
 /**
+ * Guards async open/save responses against rebinding a draft that has moved
+ * on (issue #53 round-2 review): a save response that lands AFTER the user
+ * opened a different post must not restore the old postId/rev — the next
+ * save would overwrite the wrong file. Every operation captures the current
+ * epoch via begin(); anything that moves the editor to a different binding
+ * (open, reset) calls invalidate(); a response only applies if isCurrent()
+ * still holds for its captured token. Pure, so node:test can pin the
+ * interleavings without a browser.
+ */
+export function opSequencer() {
+  let epoch = 0;
+  return {
+    begin: () => epoch,
+    invalidate: () => ++epoch,
+    isCurrent: (token) => token === epoch,
+  };
+}
+
+/**
  * Vite `optimizeDeps.include` for the editor client. Every bundled specifier
  * the client imports must be listed here, or Vite discovers the un-listed ones
  * on first /_editor load and triggers a mid-session re-optimization reload
