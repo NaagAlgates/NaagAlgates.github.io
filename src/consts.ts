@@ -22,7 +22,7 @@ export const OG_LOCALE = "en_AU";
 export const SITE_DESCRIPTION =
   "A personal, human-written blog about technology and AI — notes, ideas, and experiences that do not represent any company.";
 
-export const HUMAN_LINE = "Human-made · mistakes included";
+export const HUMAN_LINE = "Human-written · mistakes included";
 
 // Public links shown in the sidebar (connect / contact).
 export const LINKS = [
