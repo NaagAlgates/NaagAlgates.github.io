@@ -489,20 +489,26 @@ test("endpoint: no CORS headers on any response from the new endpoints (criterio
   assert.equal(open.status, 200);
   noCors(open, "open 200");
 
-  // Rejected responses: 403 (gate), 400 (malformed), 409 (unknown fileId).
+  // Rejected responses, per endpoint: each missing-gate-header variant (403),
+  // malformed JSON (400), and unknown fileId (409) — all CORS-free.
   for (const path of ["/_editor/api/posts", "/_editor/api/open"]) {
-    const forbidden = await request(port, {
-      method: "POST",
-      path,
-      headers: { host: `localhost:${port}`, "content-type": "application/json" },
-      body: "{}",
-    });
-    assert.equal(forbidden.status, 403);
-    noCors(forbidden, `${path} 403`);
+    const gateVariants = [
+      ["no Origin and no editor header", { host: `localhost:${port}`, "content-type": "application/json" }],
+      ["Origin but no editor header", { host: `localhost:${port}`, origin: `http://localhost:${port}`, "content-type": "application/json" }],
+      ["editor header but no Origin", { host: `localhost:${port}`, "x-blog-editor": "1", "content-type": "application/json" }],
+    ];
+    for (const [label, headers] of gateVariants) {
+      const forbidden = await request(port, { method: "POST", path, headers, body: "{}" });
+      assert.equal(forbidden.status, 403, `${path}: ${label}`);
+      noCors(forbidden, `${path} 403 (${label})`);
+    }
+    const malformed = await request(port, { method: "POST", path, headers: goodPostHeaders(port), body: "not json" });
+    assert.equal(malformed.status, 400, `${path} malformed JSON`);
+    noCors(malformed, `${path} 400`);
   }
   const bad = await request(port, { method: "POST", path: "/_editor/api/open", headers: goodPostHeaders(port), body: "{}" });
   assert.equal(bad.status, 400);
-  noCors(bad, "open 400");
+  noCors(bad, "open 400 (missing fileId)");
   const unknown = await request(port, { method: "POST", path: "/_editor/api/open", headers: goodPostHeaders(port), body: JSON.stringify({ fileId: "nope" }) });
   assert.equal(unknown.status, 409);
   noCors(unknown, "open 409");

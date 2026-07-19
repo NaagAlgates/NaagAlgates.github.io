@@ -638,7 +638,8 @@ test("adopt: conflict semantics — external edit, replaced inode, stale rev, un
   );
   assert.equal(await fsp.readFile(file, "utf8"), external);
 
-  // Replaced file (same bytes, new inode) → 409 (identity check).
+  // Replaced file (same bytes, new inode) → 409 (identity check), and the
+  // replacement's bytes are untouched by the rejection.
   const opened2 = await store.openPost(fileId);
   const bytes = await fsp.readFile(file);
   await fsp.unlink(file);
@@ -652,6 +653,7 @@ test("adopt: conflict semantics — external edit, replaced inode, stale rev, un
     }),
     ConflictError,
   );
+  assert.ok((await fsp.readFile(file)).equals(bytes));
 
   // Two adoptions of one file: first save wins, second 409s (never merged).
   const a = await store.openPost(fileId);
