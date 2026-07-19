@@ -514,6 +514,27 @@ test("parseFrontmatter: refusals — unknown/reordered keys, formats, non-canoni
   refuse("# Just markdown\n");
 });
 
+test("parseFrontmatter: empty-body layouts round-trip byte-exactly", () => {
+  // `---\n` at EOF: the split artifact must NOT read as a blank separator.
+  const bare = '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\n---\n';
+  const p1 = parseFrontmatter(bare);
+  assert.equal(p1.blankAfterFrontmatter, false);
+  assert.equal(p1.body, "");
+  assert.equal(
+    renderPostFile({ ...p1, pubDate: p1.pubDate }, p1.body, { blankAfterFrontmatter: p1.blankAfterFrontmatter }),
+    bare,
+  );
+  // `---\n\n` at EOF: a real (empty) separator layout.
+  const sep = `${bare}\n`;
+  const p2 = parseFrontmatter(sep);
+  assert.equal(p2.blankAfterFrontmatter, true);
+  assert.equal(p2.body, "");
+  assert.equal(
+    renderPostFile({ ...p2, pubDate: p2.pubDate }, p2.body, { blankAfterFrontmatter: p2.blankAfterFrontmatter }),
+    sep,
+  );
+});
+
 test("parseFrontmatter: the legacy no-blank-line layout parses and round-trips byte-exactly", () => {
   // 18 of the 20 real posts start the body right after the closing ---.
   const file = '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\n---\nBody first line.\n\nMore.\n';
@@ -771,11 +792,35 @@ test("adopt: wysiwygUnsafe is the union of all lossy detectors", async () => {
   assert.equal((await open("clean.md")).wysiwygUnsafe, false);
 });
 
+// The 19 git-tracked posts — pinned by name so a silently missing or
+// deleted corpus post FAILS this suite (a derived-only expectation would
+// shrink with the directory and still pass). Working trees may hold extra
+// drafts; those are covered by the derived comparison below.
+const TRACKED_POSTS = [
+  "2d-search-kotlin-hackerrank.md",
+  "acm-icpc-team-finder-algorithm.md",
+  "back-to-blogging.md",
+  "base-calse-in-dart.md",
+  "breaking-the-record.md",
+  "companion-object-vs-factory-keyword.md",
+  "exploring-the-searchbar-widget-in-flutter.md",
+  "final-keyword-for-classes.md",
+  "flutter-refreshindicator-widget.md",
+  "interface-keyword-in-dart.md",
+  "isolates-in-dart.md",
+  "sealed-classes-in-kotlin.md",
+  "solid-principles-in-counter-app-riverpod.md",
+  "switch-expression-in-dart-310.md",
+  "understanding-livedata-stateflow-sharedflow-and-flow-in-android.md",
+  "what-is-floor-dart.md",
+  "what-is-never-in-dart.md",
+  "whats-is-managed-and-unmanaged-code-in-dot-net.md",
+  "why-or-how-fluter-renders-quickly.md",
+];
+
 test("real corpus: every current post lists as openable and parses (read-only)", async () => {
-  // Expectation derived from the directory itself (a clean checkout has 19
-  // tracked posts; a working tree may hold extra drafts). _seo-fixture-*
-  // files are transient artifacts of the concurrently-running seo tests —
-  // excluded here to keep this test deterministic under `node --test`
+  // _seo-fixture-* files are transient artifacts of the concurrently-running
+  // seo tests — excluded to keep this test deterministic under `node --test`
   // parallelism, not because the editor excludes them.
   const isFixture = (name) => name.startsWith("_seo-fixture-");
   const expected = (await fsp.readdir(REAL_BLOG_DIR, { withFileTypes: true }))
@@ -785,8 +830,12 @@ test("real corpus: every current post lists as openable and parses (read-only)",
   const store = new PostStore({ dir: REAL_BLOG_DIR });
   const posts = await store.listPosts();
   const topLevel = posts.filter((p) => !p.relPath.includes("/") && !isFixture(p.relPath));
-  assert.deepEqual(topLevel.map((p) => p.relPath).sort(), expected);
-  assert.ok(topLevel.length >= 19, `expected >= 19 posts, saw ${topLevel.length}`);
+  const listed = topLevel.map((p) => p.relPath).sort();
+  assert.deepEqual(listed, expected);
+  // Every pinned tracked post MUST be present — deletion/omission fails here.
+  for (const name of TRACKED_POSTS) {
+    assert.ok(listed.includes(name), `tracked post missing from listing: ${name}`);
+  }
   // Newest-first ordering holds over the real corpus.
   for (let i = 1; i < topLevel.length; i++) {
     assert.ok(

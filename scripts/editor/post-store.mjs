@@ -101,6 +101,10 @@ export function renderPostFile(meta, body, { blankAfterFrontmatter = true } = {}
   // an opened post must be re-saved in ITS OWN layout or a no-edit save
   // would mutate the file (issue #53).
   const trimmed = body.replace(/\n+$/, "");
+  // Empty body: emit no body newline, so `---\n` (and `---\n\n` with the
+  // separator) round-trip byte-exactly instead of gaining blank lines.
+  if (trimmed === "")
+    return `${serializeFrontmatter(meta)}\n${blankAfterFrontmatter ? "\n" : ""}`;
   return `${serializeFrontmatter(meta)}\n${blankAfterFrontmatter ? "\n" : ""}${trimmed}\n`;
 }
 
@@ -150,8 +154,11 @@ export function parseFrontmatter(fileText) {
   }
   // Editor-written files have a blank line between --- and the body; most
   // legacy posts don't. Both layouts are accepted, and which one the file
-  // uses is preserved so a no-edit save stays byte-identical.
-  const blankAfterFrontmatter = lines[6] === "";
+  // uses is preserved so a no-edit save stays byte-identical. When the file
+  // ends right at `---\n`, lines[6] is the empty string ARTIFACT of the
+  // trailing newline, not a separator line — that's the no-separator layout
+  // with an empty body (`---\n\n` at EOF, length 8, is the separator one).
+  const blankAfterFrontmatter = lines[6] === "" && lines.length > 7;
   const take = (line, key) => {
     if (!line.startsWith(`${key}: `)) {
       const found = keyOf(line);

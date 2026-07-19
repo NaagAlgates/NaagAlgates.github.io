@@ -356,10 +356,14 @@ function clientSlug(text) {
 // session without the postId/rev the server assigned. Re-adopt them from the
 // server's last successful save when it unambiguously matches this draft.
 async function adoptLastSave() {
+  // Recovery is also an async rebinding op: a late response must not undo a
+  // reset ("Start a new post") or fight an open that happened meanwhile.
+  const token = ops.begin();
   try {
     const res = await fetch("/_editor/api/last-save");
     if (!res.ok) return;
     const last = await res.json();
+    if (!ops.isCurrent(token)) return;
     const title = document.getElementById("title").value;
     if (!postId && last.slug && last.slug === clientSlug(title)) {
       postId = last.postId;
@@ -434,6 +438,9 @@ openBtn.addEventListener("click", async () => {
     document.getElementById("title").value = data.title;
     document.getElementById("description").value = data.description;
     document.getElementById("tags").value = data.tags.join(", ");
+    // An override granted for the PREVIOUS draft must not carry into the
+    // newly opened post — its first WYSIWYG switch has to be blocked again.
+    lossyOverrideUntil = 0;
     // Binding order (plan D4): for a WYSIWYG-unsafe post the mode switch MUST
     // precede the body injection — applyOpenedPost owns that contract.
     const unsafe = applyOpenedPost(editor, data);
@@ -460,7 +467,8 @@ openBtn.addEventListener("click", async () => {
 // Recovery path for genuinely lost ownership (e.g. dev-server restart):
 // unlink from the saved file but keep the text, so Save creates a new post.
 document.getElementById("reset").addEventListener("click", () => {
-  ops.invalidate(); // in-flight save/open responses must not rebind this draft
+  ops.invalidate(); // in-flight save/open/recovery responses must not rebind this draft
+  lossyOverrideUntil = 0; // a fresh draft starts with full lossy protection
   postId = null;
   rev = null;
   sessionStorage.removeItem(SESSION_KEY);
