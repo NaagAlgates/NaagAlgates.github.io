@@ -2,11 +2,13 @@
 // server by integration.mjs; also bootable on a plain node:http server for
 // the endpoint-level tests. Never part of `astro build` output.
 import { EDITOR_HEADER, checkRequest } from "./security.mjs";
-import { ConflictError, PostStore, ValidationError } from "./post-store.mjs";
+import { ConflictError, PostStore, SAVE_BODY_LIMIT, ValidationError } from "./post-store.mjs";
 import { ImageStore } from "./image-store.mjs";
 import { editorPageHtml } from "./page.mjs";
 
-const BODY_LIMIT = 2 * 1024 * 1024; // 2 MB
+// Single source of truth in post-store.mjs: the open-time size refusal must
+// stay below the same cap this endpoint enforces.
+const BODY_LIMIT = SAVE_BODY_LIMIT;
 const IMAGE_LIMIT = 8 * 1024 * 1024; // 8 MiB — raw image uploads, not JSON
 
 function send(res, status, type, body) {
@@ -145,6 +147,42 @@ export function createEditorMiddleware({
       const last = await postStore.getLastSave();
       if (!last) return sendJson(res, 404, { error: "no save in this server run" });
       return sendJson(res, 200, last);
+    }
+
+    // Issue #53: list + open-existing. Both POST so they inherit the full
+    // gate (loopback + Host + mandatory Origin + custom header) — no new GET
+    // surface with the weaker GET-only checks.
+    if (req.method === "POST" && url === "/_editor/api/posts") {
+      try {
+        await readJsonBody(req); // gate-consistent JSON POST; body content unused
+      } catch (err) {
+        return sendJson(res, err.code === "too_large" ? 413 : 400, { error: err.message });
+      }
+      try {
+        return sendJson(res, 200, { posts: await postStore.listPosts() });
+      } catch {
+        return sendJson(res, 500, { error: "listing posts failed" });
+      }
+    }
+
+    if (req.method === "POST" && url === "/_editor/api/open") {
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch (err) {
+        return sendJson(res, err.code === "too_large" ? 413 : 400, { error: err.message });
+      }
+      if (typeof body.fileId !== "string" || !body.fileId)
+        return sendJson(res, 400, { error: "fileId is required" });
+      try {
+        return sendJson(res, 200, await postStore.openPost(body.fileId));
+      } catch (err) {
+        // Open-time refusals are all ConflictError→409 by design (plan D2/D3);
+        // 400 stays reserved for malformed requests.
+        if (err instanceof ValidationError) return sendJson(res, 400, { error: err.message });
+        if (err instanceof ConflictError) return sendJson(res, 409, { error: err.message });
+        return sendJson(res, 500, { error: "open failed" });
+      }
     }
 
     if (req.method === "POST" && url === "/_editor/api/save") {

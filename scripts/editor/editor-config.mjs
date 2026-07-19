@@ -109,6 +109,28 @@ export function languageKeyAction(key, hasQuery, visibleCount) {
 }
 
 /**
+ * Fill the editor with an opened post's body, enforcing the ordering the
+ * empirical issue-#53 probe made binding: when the post is WYSIWYG-unsafe,
+ * the editor MUST be in markdown mode BEFORE the body is injected — injecting
+ * while the WYSIWYG model is active runs the destructive conversion (iframes
+ * removed, figure/figcaption flattened, image attributes dropped) during the
+ * open itself. Pure decision logic over an editor-shaped API so node:test can
+ * pin the call order with a recording mock; client.mjs passes the real editor.
+ * @param {{ isMarkdownMode: () => boolean,
+ *           changeMode: (mode: string, silent?: boolean) => void,
+ *           setMarkdown: (body: string) => void }} editorApi
+ * @param {{ body: string, wysiwygUnsafe: boolean }} post
+ * @returns {boolean} whether the post was treated as WYSIWYG-unsafe
+ */
+export function applyOpenedPost(editorApi, post) {
+  if (post.wysiwygUnsafe && !editorApi.isMarkdownMode()) {
+    editorApi.changeMode("markdown", true);
+  }
+  editorApi.setMarkdown(post.body);
+  return Boolean(post.wysiwygUnsafe);
+}
+
+/**
  * Vite `optimizeDeps.include` for the editor client. Every bundled specifier
  * the client imports must be listed here, or Vite discovers the un-listed ones
  * on first /_editor load and triggers a mid-session re-optimization reload

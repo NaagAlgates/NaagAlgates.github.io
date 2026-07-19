@@ -339,3 +339,129 @@ test("endpoint: editor page is served and loads the client module", async (t) =>
   });
   assert.notEqual(other.status, 200);
 });
+
+// ---------------------------------------------------------------------------
+// Issue #53: list + open-existing endpoints.
+
+const LEGACY_FILE =
+  '---\ntitle: "Legacy Post"\ndescription: "Legacy description."\npubDate: 2020-02-02\ntags: ["Flutter"]\n---\n\nIntro.\n\n<iframe src="https://x"></iframe>\n';
+
+test("endpoint: list + open + edit-save lifecycle for an existing post", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+  await fsp.writeFile(join(blogDir, "legacy-post.md"), LEGACY_FILE);
+
+  const list = await request(port, {
+    method: "POST",
+    path: "/_editor/api/posts",
+    headers: goodPostHeaders(port),
+    body: "{}",
+  });
+  assert.equal(list.status, 200);
+  const { posts } = JSON.parse(list.body);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].relPath, "legacy-post.md");
+  assert.equal(posts[0].openable, true);
+
+  const open = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ fileId: posts[0].fileId }),
+  });
+  assert.equal(open.status, 200);
+  const opened = JSON.parse(open.body);
+  assert.equal(opened.title, "Legacy Post");
+  assert.equal(opened.pubDate, "2020-02-02");
+  assert.equal(opened.wysiwygUnsafe, true); // iframe fixture
+
+  const save = await request(port, {
+    method: "POST",
+    path: "/_editor/api/save",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({
+      mode: "update",
+      postId: opened.postId,
+      rev: opened.rev,
+      title: opened.title,
+      description: opened.description,
+      tags: opened.tags,
+      body: opened.body,
+    }),
+  });
+  assert.equal(save.status, 200);
+  // No-edit save left the file byte-identical; pubDate untouched.
+  assert.equal(await fsp.readFile(join(blogDir, "legacy-post.md"), "utf8"), LEGACY_FILE);
+});
+
+test("endpoint: open-existing error contract — 403 gate, 400 malformed, 409 refusals", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+  await fsp.writeFile(
+    join(blogDir, "extra-key.md"),
+    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nimage: "/x.png"\n---\n\nB\n',
+  );
+
+  // Security gate: both new POSTs refuse without Origin / custom header.
+  for (const path of ["/_editor/api/posts", "/_editor/api/open"]) {
+    const noOrigin = await request(port, {
+      method: "POST",
+      path,
+      headers: { host: `localhost:${port}`, "x-blog-editor": "1", "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(noOrigin.status, 403, `${path} without Origin`);
+    const noHeader = await request(port, {
+      method: "POST",
+      path,
+      headers: { host: `localhost:${port}`, origin: `http://localhost:${port}`, "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(noHeader.status, 403, `${path} without X-Blog-Editor`);
+    assert.equal(noOrigin.headers["access-control-allow-origin"], undefined);
+  }
+
+  // Malformed → 400.
+  const missingId = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: "{}",
+  });
+  assert.equal(missingId.status, 400);
+  const badJson = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: "not json",
+  });
+  assert.equal(badJson.status, 400);
+
+  // Unknown fileId → 409.
+  const unknown = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ fileId: "never-minted" }),
+  });
+  assert.equal(unknown.status, 409);
+
+  // Un-round-trippable file: listed with a reason, open refused with 409.
+  const list = await request(port, {
+    method: "POST",
+    path: "/_editor/api/posts",
+    headers: goodPostHeaders(port),
+    body: "{}",
+  });
+  const { posts } = JSON.parse(list.body);
+  assert.equal(posts[0].openable, false);
+  const refused = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ fileId: posts[0].fileId }),
+  });
+  assert.equal(refused.status, 409);
+  // And the file was not touched by any of this.
+  assert.match(await fsp.readFile(join(blogDir, "extra-key.md"), "utf8"), /^image: "\/x\.png"$/m);
+});

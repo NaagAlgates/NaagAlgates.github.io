@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   TOOLBAR_ITEMS,
+  applyOpenedPost,
   codeGroupIndex,
   CODE_LANGUAGES,
   PRISM_COMPONENT_LANGUAGES,
@@ -250,4 +251,41 @@ test("integration.mjs uses the shared optimizeDeps helper (not a hand-maintained
     /include:\s*editorOptimizeDepsInclude\(\)/,
     "integration.mjs builds optimizeDeps.include from the shared, tested helper",
   );
+});
+
+test("applyOpenedPost: markdown mode is established BEFORE body injection for unsafe posts", () => {
+  // Recording mock: the whole point is the call ORDER (issue #53 — injecting
+  // into an active WYSIWYG model runs the destructive conversion at open).
+  const calls = [];
+  const mockEditor = (markdownMode) => ({
+    isMarkdownMode: () => {
+      calls.push("isMarkdownMode");
+      return markdownMode;
+    },
+    changeMode: (mode, silent) => calls.push(`changeMode:${mode}:${silent}`),
+    setMarkdown: () => calls.push("setMarkdown"),
+  });
+
+  // Unsafe + editor in WYSIWYG: switch strictly precedes injection.
+  calls.length = 0;
+  let unsafe = applyOpenedPost(mockEditor(false), { body: "<iframe></iframe>", wysiwygUnsafe: true });
+  assert.equal(unsafe, true);
+  const changeIdx = calls.indexOf("changeMode:markdown:true");
+  const setIdx = calls.indexOf("setMarkdown");
+  assert.ok(changeIdx !== -1, "changeMode must be called");
+  assert.ok(changeIdx < setIdx, "changeMode must precede setMarkdown");
+
+  // Unsafe + already markdown: no redundant switch, body still injected.
+  calls.length = 0;
+  unsafe = applyOpenedPost(mockEditor(true), { body: "<i>x</i>", wysiwygUnsafe: true });
+  assert.equal(unsafe, true);
+  assert.ok(!calls.some((c) => c.startsWith("changeMode")));
+  assert.ok(calls.includes("setMarkdown"));
+
+  // Safe post: no forced switch.
+  calls.length = 0;
+  unsafe = applyOpenedPost(mockEditor(false), { body: "plain", wysiwygUnsafe: false });
+  assert.equal(unsafe, false);
+  assert.ok(!calls.some((c) => c.startsWith("changeMode")));
+  assert.ok(calls.includes("setMarkdown"));
 });

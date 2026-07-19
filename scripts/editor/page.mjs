@@ -8,7 +8,7 @@ export function editorPageHtml({ clientSrc }) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>New blog post — local editor</title>
+<title>Blog post editor — local</title>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; max-width: 860px;
          margin: 24px auto; padding: 0 16px; color: #222; }
@@ -19,6 +19,10 @@ export function editorPageHtml({ clientSrc }) {
      <input> and language <button> list — issue #48). */
   #title, #description, #tags { width: 100%; padding: 8px; font-size: 14px;
           border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; }
+  #open-select { padding: 7px; font-size: 14px; border: 1px solid #bbb;
+          border-radius: 6px; max-width: 70%; }
+  #open { padding: 7px 16px; font-size: 14px; border: 0; border-radius: 6px;
+          background: #0550ae; color: #fff; cursor: pointer; margin-left: 8px; }
   #editor { margin-top: 14px; }
   #save, #reset { margin-top: 16px; padding: 10px 22px; font-size: 15px; border: 0;
            border-radius: 6px; background: #1a7f37; color: #fff; cursor: pointer; }
@@ -29,10 +33,13 @@ export function editorPageHtml({ clientSrc }) {
 </style>
 </head>
 <body>
-<h1>New blog post <span class="hint">(local only — saves a markdown file into src/content/blog/)</span></h1>
+<h1>Blog post editor <span class="hint">(local only — reads and saves markdown files in src/content/blog/)</span></h1>
+<label for="open-select">Open existing post (optional)</label>
+<div><select id="open-select"><option value="">— write a new post, or choose one to edit —</option></select><button id="open" type="button">Open</button></div>
+<div class="hint">Opening never changes the file until you Save. Editing an existing post never renames its file.</div>
 <label for="title">Title</label>
 <input id="title" placeholder="My Post Title">
-<div class="hint">Filename/URL comes from the title on first save and then stays fixed.</div>
+<div class="hint">For a new post the filename/URL comes from the title on first save and then stays fixed.</div>
 <label for="description">Description</label>
 <input id="description" placeholder="One-line summary for the list, RSS, and search results.">
 <label for="tags">Tags (comma-separated, optional)</label>

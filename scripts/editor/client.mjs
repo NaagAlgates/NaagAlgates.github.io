@@ -30,10 +30,11 @@ import "prismjs/themes/prism.css";
 import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight";
 import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
-import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
+import { hasRawHtml, hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
 import {
   TOOLBAR_ITEMS,
   CODE_LANGUAGES,
+  applyOpenedPost,
   languageMatches,
   languageKeyAction,
 } from "./editor-config.mjs";
@@ -53,11 +54,14 @@ curatedHighlighter.languages = Object.fromEntries(
 );
 
 /** Every WYSIWYG-lossy construct the markdown contains, or null — the
- * warning must name ALL of them, or the unnamed one is silently lost. */
+ * warning must name ALL of them, or the unnamed one is silently lost.
+ * Raw HTML is lossy wholesale (issue #53, empirically: iframes removed,
+ * figure/figcaption flattened, img attributes dropped). */
 function lossyConstruct(md) {
   const found = [];
   if (hasTitledImage(md)) found.push('image titles (![alt](url "title"))');
   if (hasSizedImage(md)) found.push("image width/height attributes (<img ... width>)");
+  if (hasRawHtml(md)) found.push("raw HTML (iframes, figures, inline tags)");
   return found.length ? found.join(" and ") : null;
 }
 
@@ -368,6 +372,80 @@ async function adoptLastSave() {
 
 restoreSession();
 adoptLastSave();
+
+// --- Open an existing post (issue #53) ---------------------------------
+// Both endpoints are POST so they carry the full security gate (Origin +
+// custom header force a preflight cross-origin, which can never succeed).
+const openSelect = document.getElementById("open-select");
+const openBtn = document.getElementById("open");
+
+async function loadPostList() {
+  try {
+    const res = await fetch("/_editor/api/posts", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-blog-editor": "1" },
+      body: "{}",
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const post of data.posts) {
+      const option = document.createElement("option");
+      option.value = post.fileId;
+      option.textContent = post.openable
+        ? `${post.title} (${post.relPath})`
+        : `${post.relPath} — cannot open`;
+      if (!post.openable) {
+        option.disabled = true;
+        option.title = post.reason || "";
+      }
+      openSelect.appendChild(option);
+    }
+  } catch {
+    /* listing is best-effort; authoring new posts still works */
+  }
+}
+loadPostList();
+
+openBtn.addEventListener("click", async () => {
+  const fileId = openSelect.value;
+  if (!fileId) return;
+  openBtn.disabled = true;
+  setStatus("", "Opening…");
+  try {
+    const res = await fetch("/_editor/api/open", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-blog-editor": "1" },
+      body: JSON.stringify({ fileId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus("err", `Not opened: ${data.error || res.status}`);
+      return;
+    }
+    document.getElementById("title").value = data.title;
+    document.getElementById("description").value = data.description;
+    document.getElementById("tags").value = data.tags.join(", ");
+    // Binding order (plan D4): for a WYSIWYG-unsafe post the mode switch MUST
+    // precede the body injection — applyOpenedPost owns that contract.
+    const unsafe = applyOpenedPost(editor, data);
+    mdSnapshot = data.body;
+    postId = data.postId;
+    rev = data.rev;
+    persistSession();
+    setStatus(
+      "ok",
+      `Editing ${data.relPath} — Save will update this file (never rename it).` +
+        (unsafe
+          ? "\nOpened in the Markdown tab: this post contains content the " +
+            "WYSIWYG view would corrupt (raw HTML or titled images)."
+          : ""),
+    );
+  } catch (e) {
+    setStatus("err", `Not opened: ${e}`);
+  } finally {
+    openBtn.disabled = false;
+  }
+});
 
 // Recovery path for genuinely lost ownership (e.g. dev-server restart):
 // unlink from the saved file but keep the text, so Save creates a new post.
