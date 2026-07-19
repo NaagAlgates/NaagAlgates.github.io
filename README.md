@@ -7,6 +7,8 @@ hosted on GitHub Pages at **www.nagaraj.com.au**.
 
 ## Develop
 
+Requires **Node 22.12+** (Astro 7's floor; see `.nvmrc` — run `nvm use` to match).
+
 ```bash
 npm install
 npm run dev        # http://localhost:4321

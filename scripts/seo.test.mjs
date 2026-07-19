@@ -29,11 +29,20 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BLOG_DIR = path.join(ROOT, "src", "content", "blog");
-const ASTRO_BIN = path.join(ROOT, "node_modules", "astro", "astro.js");
+// Resolve the Astro CLI from its package's own `bin` field rather than a
+// hard-coded filename, so this survives Astro's CLI-entry moves (Astro <=5
+// exposed `astro.js` at the package root; Astro 7 moved it to `bin/astro.mjs`).
+const require = createRequire(import.meta.url);
+const astroPkgPath = require.resolve("astro/package.json");
+const ASTRO_BIN = path.resolve(
+  path.dirname(astroPkgPath),
+  require("astro/package.json").bin.astro,
+);
 const SITE = "https://www.nagaraj.com.au";
 
 // Per-PID unique slugs so two concurrent `npm test` runs never touch the same file.
