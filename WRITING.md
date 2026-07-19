@@ -43,6 +43,31 @@ Notes:
   and drops them if you edit there — the editor warns you when that applies.
 - Publishing is unchanged: commit the file and push (see below).
 
+### Editing an existing post in the editor
+
+Use **Open existing post** at the top of `/_editor`: pick a post and hit
+**Open**. The fields and body fill in; **Save** then updates that same file —
+opening never touches the file, a title edit only changes the frontmatter
+(the filename/URL never changes), and the original `pubDate` is preserved.
+
+Rules and limits:
+
+- Posts containing raw HTML (YouTube iframes, `<figure>` blocks, sized or
+  lazy-loading `<img>` tags) or titled images open in the **Markdown tab**,
+  because the WYSIWYG view corrupts those constructs (iframes are removed
+  outright). The usual switch-block-and-override applies.
+- A post the editor could not faithfully re-save is listed greyed-out with the
+  reason (hover it), e.g. frontmatter fields the editor doesn't model
+  (`updatedDate`, `image`, unknown keys), multiline or comma-containing
+  metadata, or hand-written YAML in a different style. Edit those files
+  directly — the editor never opens-and-rewrites what it can't preserve.
+- Posts in subdirectories of `src/content/blog/` (none exist today) are
+  listed but not openable — edit them directly.
+- The conflict rules below apply as usual: if the file changes on disk after
+  you opened it, Save refuses and keeps your text; re-open (or edit the file
+  directly) to continue. A dev-server restart also forgets open posts —
+  re-open from the list.
+
 ### Images
 
 Inserting an image in the editor (toolbar button, paste, or drag-and-drop)

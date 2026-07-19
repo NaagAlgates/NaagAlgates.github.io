@@ -2,7 +2,14 @@
 // frontmatter matching src/content/blog conventions, and writes files so the
 // collection never sees a partial post. See .omc/plans/44-local-blog-editor.md.
 import { createHash, randomUUID } from "node:crypto";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { hasRawHtml, hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
+
+/** Single source of truth for the save endpoint's JSON body cap (middleware
+ * imports this). Open-time size refusals leave headroom below it so a post
+ * that opens can always be saved. */
+export const SAVE_BODY_LIMIT = 2 * 1024 * 1024; // 2 MiB
+const SAVE_BODY_HEADROOM = 64 * 1024; // 64 KiB
 
 /** Same rule as scripts/new-post.mjs and tagSlug() in src/consts.ts. */
 export function slugify(text) {
@@ -87,11 +94,149 @@ export function serializeFrontmatter({ title, description, pubDate, tags }) {
   ].join("\n");
 }
 
-export function renderPostFile(meta, body) {
+export function renderPostFile(meta, body, { blankAfterFrontmatter = true } = {}) {
   // Body is preserved verbatim; only the final newline count is normalized.
+  // blankAfterFrontmatter: the editor's own files put a blank line between
+  // the closing --- and the body, but 18 of the 20 legacy posts don't —
+  // an opened post must be re-saved in ITS OWN layout or a no-edit save
+  // would mutate the file (issue #53).
   const trimmed = body.replace(/\n+$/, "");
-  return `${serializeFrontmatter(meta)}\n\n${trimmed}\n`;
+  // Empty body: emit no body newline, so `---\n` (and `---\n\n` with the
+  // separator) round-trip byte-exactly instead of gaining blank lines.
+  if (trimmed === "")
+    return `${serializeFrontmatter(meta)}\n${blankAfterFrontmatter ? "\n" : ""}`;
+  return `${serializeFrontmatter(meta)}\n${blankAfterFrontmatter ? "\n" : ""}${trimmed}\n`;
 }
+
+/** One frontmatter scalar, strictly: must be a canonical JSON string token —
+ * `JSON.stringify(JSON.parse(token))` byte-identical — so a save can never
+ * silently respell it (e.g. `a` for `a`, or `\/`). */
+function parseCanonicalString(token, key) {
+  let value;
+  try {
+    value = JSON.parse(token);
+  } catch {
+    throw new ConflictError(
+      `frontmatter ${key} is not the editor's quoted format — edit this file directly`,
+    );
+  }
+  if (typeof value !== "string" || JSON.stringify(value) !== token)
+    throw new ConflictError(
+      `frontmatter ${key} uses a spelling the editor would rewrite on save — edit this file directly`,
+    );
+  return value;
+}
+
+/**
+ * Strict parser for the exact file shape this editor writes (the whole
+ * current corpus verifiably uses it). Anything else — unknown or reordered
+ * keys (incl. schema-optional updatedDate/image), unquoted scalars,
+ * non-canonical spellings, a missing blank line — is refused with
+ * ConflictError rather than opened-and-rewritten: silent dropping or
+ * normalizing of frontmatter the editor doesn't model is forbidden
+ * (issue #53 investigation, hazard 4).
+ */
+export function parseFrontmatter(fileText) {
+  const lines = String(fileText).split("\n");
+  const fail = (why) =>
+    new ConflictError(`${why} — this file is not in the editor's format; edit it directly`);
+  // Name the key actually found, so refusals for e.g. updatedDate/image say
+  // so (plan acceptance criterion 3), instead of a generic shape error.
+  const keyOf = (line) => /^([A-Za-z0-9_-]+):/.exec(line ?? "")?.[1] ?? null;
+  if (lines[0] !== "---" || lines.length < 7) throw fail("unrecognized frontmatter layout");
+  if (lines[5] !== "---") {
+    const extra = keyOf(lines[5]);
+    throw fail(
+      extra
+        ? `frontmatter has a key the editor does not support: ${JSON.stringify(extra)}`
+        : "frontmatter is not exactly title/description/pubDate/tags (an extra, missing, or reordered key)",
+    );
+  }
+  // Editor-written files have a blank line between --- and the body; most
+  // legacy posts don't. Both layouts are accepted, and which one the file
+  // uses is preserved so a no-edit save stays byte-identical. When the file
+  // ends right at `---\n`, lines[6] is the empty string ARTIFACT of the
+  // trailing newline, not a separator line — that's the no-separator layout
+  // with an empty body (`---\n\n` at EOF, length 8, is the separator one).
+  const blankAfterFrontmatter = lines[6] === "" && lines.length > 7;
+  const take = (line, key) => {
+    if (!line.startsWith(`${key}: `)) {
+      const found = keyOf(line);
+      throw fail(
+        found && found !== key
+          ? `expected ${key} but found ${JSON.stringify(found)} at its fixed position`
+          : `expected ${key} at its fixed position`,
+      );
+    }
+    return line.slice(key.length + 2);
+  };
+  const title = parseCanonicalString(take(lines[1], "title"), "title");
+  const description = parseCanonicalString(take(lines[2], "description"), "description");
+  const pubDate = take(lines[3], "pubDate");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(pubDate) || Number.isNaN(Date.parse(pubDate)))
+    throw fail("pubDate is not a plain YYYY-MM-DD date");
+  const tagsToken = take(lines[4], "tags");
+  let tags;
+  try {
+    tags = JSON.parse(tagsToken);
+  } catch {
+    throw fail("tags is not a JSON array");
+  }
+  if (!Array.isArray(tags) || tags.some((t) => typeof t !== "string"))
+    throw fail("tags is not an array of strings");
+  const canonicalTags = `[${tags.map((t) => JSON.stringify(t)).join(", ")}]`;
+  if (canonicalTags !== tagsToken)
+    throw fail("tags uses a spelling the editor would rewrite on save");
+  // join() reconstructs the body byte-exactly, including its trailing newline.
+  const body = lines.slice(blankAfterFrontmatter ? 7 : 6).join("\n");
+  return { title, description, pubDate, tags, body, blankAfterFrontmatter };
+}
+
+/**
+ * Why a parsed post still can't round-trip through the editor UI, or null.
+ * Every case here is something the save path or the single-line inputs would
+ * silently mutate or reject (hazards 6-9); refusing at open is the agreed
+ * policy — never silent alteration. Verified zero-impact on the current
+ * corpus. All refusals surface as 409 (ConflictError) via openPost.
+ */
+export function openRefusalReason({ title, description, tags }, body) {
+  if (!description.trim()) return "its description is blank, which the editor cannot save";
+  for (const [key, value] of [
+    ["title", title],
+    ["description", description],
+  ]) {
+    if (/[\r\n]/.test(value)) return `its ${key} spans multiple lines, which the editor's single-line field would flatten`;
+    if (value !== value.trim()) return `its ${key} has leading/trailing whitespace the editor would strip on save`;
+  }
+  for (const tag of tags) {
+    if (/[\r\n]/.test(tag)) return "a tag spans multiple lines, which the editor's tag field would flatten";
+    if (!tag.trim()) return "it has an empty tag, which the editor's tag field would drop";
+    if (tag !== tag.trim()) return `tag ${JSON.stringify(tag)} has surrounding whitespace the editor would strip`;
+    if (tag.includes(",")) return `tag ${JSON.stringify(tag)} contains a comma, which the editor's comma-separated tag field would split`;
+    if (!slugify(tag)) return `tag ${JSON.stringify(tag)} has no slug form, which the editor cannot save`;
+  }
+  const slug = slugify(title);
+  if (!slug) return "its title has no slug form, which the editor cannot save";
+  if (slug.length > 200) return "its title's slug exceeds the editor's 200-character save limit";
+  // Hazard 8: a post must never open if its save request could not fit the
+  // endpoint's body cap. Measure real UTF-8 bytes (string .length undercounts
+  // non-ASCII) of a worst-case-shaped payload.
+  const payload = JSON.stringify({
+    mode: "update",
+    postId: "0".repeat(36),
+    rev: "0".repeat(64),
+    title,
+    description,
+    tags,
+    body,
+  });
+  if (Buffer.byteLength(payload, "utf8") > SAVE_BODY_LIMIT - SAVE_BODY_HEADROOM)
+    return "it is too large to save through the editor's 2 MiB request limit";
+  return null;
+}
+
+export const NESTED_POST_REASON =
+  "nested posts are not supported by the editor yet — edit the file directly";
 
 /**
  * Filesystem facade — every operation the store performs goes through here so
@@ -100,11 +245,13 @@ export function renderPostFile(meta, body) {
  */
 export function defaultFsx() {
   return import("node:fs/promises").then((fsp) => ({
-    // open/read/write/stat/close on file handles; link/rename/unlink on paths
+    // open/read/write/stat/close on file handles; link/rename/unlink on
+    // paths; readdir (withFileTypes) for the post listing
     open: (p, flags) => fsp.open(p, flags),
     link: (a, b) => fsp.link(a, b),
     rename: (a, b) => fsp.rename(a, b),
     unlink: (p) => fsp.unlink(p),
+    readdir: (p) => fsp.readdir(p, { withFileTypes: true }),
   }));
 }
 
@@ -118,10 +265,16 @@ export class PostStore {
   #dir;
   #fsx;
   #clock;
-  #registry = new Map(); // postId -> { slug, ino, rev }
+  #registry = new Map(); // postId -> { slug, relPath, ino, rev, pubDate }
   #queue = Promise.resolve();
   #lastSave = null; // most recent successful save; lets the client recover
   // ownership when the dev server's post-save page reload beats the response
+  // Opaque per-run tokens for existing files (issue #53): the client never
+  // holds a filesystem path — only a fileId minted here, resolved back
+  // through these maps. Rebuilt/extended on every listing; tokens are stable
+  // per relPath for the server run.
+  #fileIdByPath = new Map(); // relPath -> fileId
+  #pathByFileId = new Map(); // fileId -> relPath
 
   /**
    * Read the last successful save THROUGH the write mutex: a read that
@@ -159,11 +312,13 @@ export class PostStore {
     return run;
   }
 
-  #paths(slug) {
-    const target = resolve(join(this.#dir, `${slug}.md`));
-    const temp = resolve(join(this.#dir, `.${slug}.md.tmp`));
-    // Defense in depth: slugify() cannot emit path separators, but never
-    // trust that here — both paths must stay inside the blog dir.
+  /** Resolve a collection-relative path (created posts pass `${slug}.md`) to
+   * its target and glob-invisible temp sibling. Defense in depth: neither
+   * slugify() nor the listing can emit an escaping path, but never trust that
+   * here — both resolved paths must stay inside the blog dir. */
+  #pathsFor(relPath) {
+    const target = resolve(join(this.#dir, relPath));
+    const temp = resolve(join(dirname(target), `.${basename(relPath)}.tmp`));
     if (!target.startsWith(this.#dir + "/") || !temp.startsWith(this.#dir + "/"))
       throw new ValidationError("resolved path escapes the blog directory");
     return { target, temp };
@@ -198,9 +353,202 @@ export class PostStore {
     throw new ValidationError(`unknown mode ${JSON.stringify(mode)}`);
   }
 
+  /** Serialize the post listing through the write mutex (a list that arrives
+   * mid-save waits and sees the final state). */
+  listPosts() {
+    const run = this.#queue.then(() => this.#listPosts());
+    this.#queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** Serialize adoption of an existing file through the write mutex. */
+  openPost(fileId) {
+    const run = this.#queue.then(() => this.#openPost(fileId));
+    this.#queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  #fileIdFor(relPath) {
+    let id = this.#fileIdByPath.get(relPath);
+    if (!id) {
+      id = randomUUID();
+      this.#fileIdByPath.set(relPath, id);
+      this.#pathByFileId.set(id, relPath);
+    }
+    return id;
+  }
+
+  /** Open flags that refuse to traverse a symlink at the final component —
+   * the listing only admits regular files, but the path can be swapped for a
+   * symlink between listing and open/verify (round-2 review). Falls back to
+   * plain "r" where O_NOFOLLOW doesn't exist. */
+  async #noFollowFlags() {
+    const { constants } = await import("node:fs");
+    return constants.O_NOFOLLOW ? constants.O_RDONLY | constants.O_NOFOLLOW : "r";
+  }
+
+  static #isSymlinkOpenError(err) {
+    return err && (err.code === "ELOOP" || err.code === "EMLINK");
+  }
+
+  /** Read + strictly parse one post; returns identity (ino/rev) with it. */
+  async #readPost(fsx, relPath) {
+    const { target } = this.#pathsFor(relPath);
+    let fh;
+    try {
+      fh = await fsx.open(target, await this.#noFollowFlags());
+      const st = await fh.stat();
+      const bytes = await fh.readFile();
+      const text = bytes.toString("utf8");
+      // Decoding is permissive (invalid sequences become U+FFFD); a save
+      // would then write different bytes than were read. Refuse instead —
+      // refuse-don't-drop applies to encoding too.
+      if (!Buffer.from(text, "utf8").equals(bytes))
+        throw new ConflictError(
+          "the file is not valid UTF-8, which a save would silently rewrite — edit it directly",
+        );
+      const parsed = parseFrontmatter(text);
+      return { parsed, ino: String(st.ino), rev: sha256(bytes) };
+    } catch (err) {
+      if (err && err.code === "ENOENT")
+        throw new ConflictError("the post file no longer exists on disk");
+      if (PostStore.#isSymlinkOpenError(err))
+        throw new ConflictError("the post path is a symlink, which the editor does not support");
+      throw err;
+    } finally {
+      await fh?.close().catch(() => {});
+    }
+  }
+
+  async #listPosts() {
+    const fsx = await this.#fs();
+    const found = []; // { relPath, nested }
+    const walk = async (rel) => {
+      const entries = await fsx.readdir(rel ? join(this.#dir, rel) : this.#dir);
+      for (const ent of entries) {
+        const name = ent.name;
+        // Dotfiles/dot-dirs (.omc state, .<name>.md.tmp temps) are never
+        // posts — the glob loader's default matching excludes hidden files.
+        // Underscore-prefixed files ARE collection members under the v5 glob
+        // loader (the seo tests build real pages for _seo-fixture-*), so
+        // they are listed like any other post. Only regular files are
+        // eligible: the write model (inode identity, link/rename publish) is
+        // not defined over symlinks, so non-regular entries are skipped.
+        if (name.startsWith(".")) continue;
+        const childRel = rel ? `${rel}/${name}` : name;
+        if (ent.isDirectory()) await walk(childRel);
+        else if (ent.isFile() && name.endsWith(".md"))
+          found.push({ relPath: childRel, nested: rel !== "" });
+      }
+    };
+    await walk("");
+    found.sort((a, b) => a.relPath.localeCompare(b.relPath));
+    // Rebuild semantics (plan D1): tokens are reused for paths still present,
+    // and entries for vanished paths are pruned so the maps stay bounded by
+    // the current post count.
+    const present = new Set(found.map((f) => f.relPath));
+    for (const [relPath, id] of this.#fileIdByPath) {
+      if (!present.has(relPath)) {
+        this.#fileIdByPath.delete(relPath);
+        this.#pathByFileId.delete(id);
+      }
+    }
+
+    const posts = [];
+    for (const { relPath, nested } of found) {
+      const fileId = this.#fileIdFor(relPath);
+      // Nested posts are collection-valid but outside this editor's write
+      // model — surfaced with a reason, never silently missing (plan D1).
+      if (nested) {
+        posts.push({ fileId, relPath, title: relPath, pubDate: null, openable: false, reason: NESTED_POST_REASON });
+        continue;
+      }
+      try {
+        const { parsed } = await this.#readPost(fsx, relPath);
+        const reason = openRefusalReason(parsed, parsed.body);
+        posts.push({
+          fileId,
+          relPath,
+          title: parsed.title,
+          pubDate: parsed.pubDate,
+          openable: !reason,
+          ...(reason ? { reason } : {}),
+        });
+      } catch (err) {
+        if (err instanceof ConflictError || err instanceof ValidationError) {
+          posts.push({ fileId, relPath, title: relPath, pubDate: null, openable: false, reason: err.message });
+        } else {
+          throw err;
+        }
+      }
+    }
+    // Newest first, matching the blog index (plan v5, user request): pubDate
+    // descending — YYYY-MM-DD compares chronologically as a string — ties by
+    // relPath, entries with no parseable pubDate (refused/nested) last.
+    posts.sort((a, b) => {
+      if (a.pubDate && b.pubDate && a.pubDate !== b.pubDate)
+        return a.pubDate < b.pubDate ? 1 : -1;
+      if (Boolean(a.pubDate) !== Boolean(b.pubDate)) return a.pubDate ? -1 : 1;
+      return a.relPath.localeCompare(b.relPath);
+    });
+    return posts;
+  }
+
+  async #openPost(fileId) {
+    const fsx = await this.#fs();
+    const relPath = this.#pathByFileId.get(typeof fileId === "string" ? fileId : "");
+    // Same philosophy as unknown postId: the file is reachable only through a
+    // token this server run minted.
+    if (!relPath)
+      throw new ConflictError("unknown fileId — refresh the post list and try again");
+    // Nested posts are listed (visibly) but outside the editor's write model
+    // (plan D1) — the refusal must hold here too, not just in the listing.
+    if (relPath.includes("/")) throw new ConflictError(NESTED_POST_REASON);
+    const { parsed, ino, rev } = await this.#readPost(fsx, relPath);
+    const reason = openRefusalReason(parsed, parsed.body);
+    if (reason) throw new ConflictError(`cannot open this post: ${reason}`);
+    // Union of every lossy detector (plan D4): a titled-image-only post must
+    // also load in markdown mode or open-time injection would lose titles.
+    const wysiwygUnsafe =
+      hasTitledImage(parsed.body) || hasSizedImage(parsed.body) || hasRawHtml(parsed.body);
+    const slug = relPath.replace(/\.md$/, "");
+    const postId = randomUUID();
+    // Adoption: from here on the post has full ownership semantics — the
+    // original pubDate AND frontmatter/body layout are preserved through the
+    // registry (hazard 3), and the update path's three-way rev + inode checks
+    // apply unchanged.
+    this.#registry.set(postId, {
+      slug,
+      relPath,
+      ino,
+      rev,
+      pubDate: parsed.pubDate,
+      blankAfterFrontmatter: parsed.blankAfterFrontmatter,
+    });
+    return {
+      postId,
+      rev,
+      relPath,
+      slug,
+      title: parsed.title,
+      description: parsed.description,
+      tags: parsed.tags,
+      pubDate: parsed.pubDate,
+      body: parsed.body,
+      blankAfterFrontmatter: parsed.blankAfterFrontmatter,
+      wysiwygUnsafe,
+    };
+  }
+
   async #create(fsx, valid) {
     const { slug } = valid;
-    const { target, temp } = this.#paths(slug);
+    const { target, temp } = this.#pathsFor(`${slug}.md`);
     const pubDate = localToday(this.#clock());
     const content = renderPostFile({ ...valid, pubDate }, valid.body);
 
@@ -222,7 +570,7 @@ export class PostStore {
     // recording after publish is race-free by construction.
     const newRev = sha256(bytes);
     const newId = randomUUID();
-    this.#registry.set(newId, { slug, ino, rev: newRev, pubDate });
+    this.#registry.set(newId, { slug, relPath: `${slug}.md`, ino, rev: newRev, pubDate });
     this.#lastSave = { postId: newId, slug, path: target, rev: newRev, pubDate };
     return this.#lastSave;
   }
@@ -243,13 +591,15 @@ export class PostStore {
     if (rev !== entry.rev)
       throw new ConflictError("stale rev — the post changed since your last save");
 
-    // The update always targets the slug registered at create time; a title
-    // change never retargets the file.
-    const { target, temp } = this.#paths(entry.slug);
+    // The update always targets the file registered at create/open time; a
+    // title change never retargets (or renames) the file.
+    const { target, temp } = this.#pathsFor(entry.relPath ?? `${entry.slug}.md`);
 
     let fh;
     try {
-      fh = await fsx.open(target, "r");
+      // No-follow: a symlink swapped in at this path could otherwise pass the
+      // inode check by pointing at the original file (round-2 review).
+      fh = await fsx.open(target, await this.#noFollowFlags());
       const st = await fh.stat();
       if (String(st.ino) !== entry.ino)
         throw new ConflictError(
@@ -263,14 +613,20 @@ export class PostStore {
     } catch (err) {
       if (err && err.code === "ENOENT")
         throw new ConflictError("the post file no longer exists on disk");
+      if (PostStore.#isSymlinkOpenError(err))
+        throw new ConflictError("the post file was replaced on disk since your last save");
       throw err;
     } finally {
       await fh?.close().catch(() => {});
     }
 
-    // Keep the frontmatter pubDate stable across re-saves of the same draft.
+    // Keep the frontmatter pubDate — and the file's own frontmatter/body
+    // separator layout (adopted legacy posts mostly lack the blank line) —
+    // stable across re-saves.
     const pubDate = entry.pubDate ?? localToday(this.#clock());
-    const content = renderPostFile({ ...valid, pubDate }, valid.body);
+    const content = renderPostFile({ ...valid, pubDate }, valid.body, {
+      blankAfterFrontmatter: entry.blankAfterFrontmatter ?? true,
+    });
 
     // New rev + inode are known BEFORE the rename (rename preserves the
     // inode), so after the atomic publish only a synchronous in-memory

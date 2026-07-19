@@ -440,3 +440,549 @@ test("localToday uses the local calendar date, not UTC", () => {
   assert.equal(instant.toISOString().slice(0, 10), "2026-01-01");
   assert.match(localToday(new Date(), undefined), /^\d{4}-\d{2}-\d{2}$/);
 });
+
+// ---------------------------------------------------------------------------
+// Issue #53: open/edit existing posts — strict parser, open-time refusals,
+// adoption into the ownership registry, and the post listing.
+
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+import {
+  NESTED_POST_REASON,
+  SAVE_BODY_LIMIT,
+  openRefusalReason,
+  parseFrontmatter,
+} from "./post-store.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REAL_BLOG_DIR = join(HERE, "..", "..", "src", "content", "blog");
+
+/** A corpus-shaped legacy post file. */
+function legacyFile({
+  title = "A Legacy Post",
+  description = "A legacy description.",
+  pubDate = "2021-03-04",
+  tags = ["Kotlin", "Hackerank"],
+  body = "Intro paragraph.\n\n## Heading\n\nMore text.",
+} = {}) {
+  return `---\ntitle: ${JSON.stringify(title)}\ndescription: ${JSON.stringify(description)}\npubDate: ${pubDate}\ntags: [${tags.map((t) => JSON.stringify(t)).join(", ")}]\n---\n\n${body}\n`;
+}
+
+test("parseFrontmatter: exact editor shape round-trips all four fields + body bytes", () => {
+  const body = 'Text with "quotes" and\n\n```html\n<iframe></iframe>\n```\n\nEnd.';
+  const file = legacyFile({ title: 'He said "hi" — ok', body });
+  const parsed = parseFrontmatter(file);
+  assert.equal(parsed.title, 'He said "hi" — ok');
+  assert.equal(parsed.description, "A legacy description.");
+  assert.equal(parsed.pubDate, "2021-03-04");
+  assert.deepEqual(parsed.tags, ["Kotlin", "Hackerank"]);
+  assert.equal(parsed.body, `${body}\n`); // byte-exact incl. trailing newline
+  // And the writer reproduces the file byte-for-byte.
+  assert.equal(renderPostFile({ ...parsed, pubDate: parsed.pubDate }, parsed.body), file);
+});
+
+test("parseFrontmatter: refusals — unknown/reordered keys, formats, non-canonical spellings", () => {
+  const refuse = (text, why) =>
+    assert.throws(() => parseFrontmatter(text), ConflictError, why);
+  // Schema-optional keys the editor doesn't model are refused, never dropped
+  // — and the refusal message NAMES the unsupported key (criterion 3).
+  assert.throws(
+    () => parseFrontmatter('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nupdatedDate: 2022-01-01\n---\n\nB\n'),
+    (err) => err instanceof ConflictError && /"updatedDate"/.test(err.message),
+  );
+  assert.throws(
+    () => parseFrontmatter('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nimage: "/x.png"\n---\n\nB\n'),
+    (err) => err instanceof ConflictError && /"image"/.test(err.message),
+  );
+  // A reordered key is named too.
+  assert.throws(
+    () => parseFrontmatter('---\ndescription: "D"\ntitle: "T"\npubDate: 2021-01-01\ntags: ["a"]\n---\n\nB\n'),
+    (err) => err instanceof ConflictError && /"description"/.test(err.message),
+  );
+  // Missing key (only three).
+  refuse('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\n---\n\nB\n');
+  // Unquoted scalar.
+  refuse('---\ntitle: Plain Title\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\n---\n\nB\n');
+  // Non-canonical escape spelling (a === "a") would be respelled on save.
+  refuse('---\ntitle: "\\u0061bc"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\n---\n\nB\n');
+  // Non-canonical tag spacing.
+  refuse('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a","b"]\n---\n\nB\n');
+  // Bad pubDate forms.
+  refuse('---\ntitle: "T"\ndescription: "D"\npubDate: 2021-13-45\ntags: ["a"]\n---\n\nB\n');
+  refuse('---\ntitle: "T"\ndescription: "D"\npubDate: "2021-01-01"\ntags: ["a"]\n---\n\nB\n');
+  // No frontmatter at all.
+  refuse("# Just markdown\n");
+});
+
+test("parseFrontmatter: empty-body layouts round-trip byte-exactly", () => {
+  // `---\n` at EOF: the split artifact must NOT read as a blank separator.
+  const bare = '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\n---\n';
+  const p1 = parseFrontmatter(bare);
+  assert.equal(p1.blankAfterFrontmatter, false);
+  assert.equal(p1.body, "");
+  assert.equal(
+    renderPostFile({ ...p1, pubDate: p1.pubDate }, p1.body, { blankAfterFrontmatter: p1.blankAfterFrontmatter }),
+    bare,
+  );
+  // `---\n\n` at EOF: a real (empty) separator layout.
+  const sep = `${bare}\n`;
+  const p2 = parseFrontmatter(sep);
+  assert.equal(p2.blankAfterFrontmatter, true);
+  assert.equal(p2.body, "");
+  assert.equal(
+    renderPostFile({ ...p2, pubDate: p2.pubDate }, p2.body, { blankAfterFrontmatter: p2.blankAfterFrontmatter }),
+    sep,
+  );
+});
+
+test("parseFrontmatter: the legacy no-blank-line layout parses and round-trips byte-exactly", () => {
+  // 18 of the 20 real posts start the body right after the closing ---.
+  const file = '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\n---\nBody first line.\n\nMore.\n';
+  const parsed = parseFrontmatter(file);
+  assert.equal(parsed.blankAfterFrontmatter, false);
+  assert.equal(parsed.body, "Body first line.\n\nMore.\n");
+  assert.equal(
+    renderPostFile({ ...parsed, pubDate: parsed.pubDate }, parsed.body, {
+      blankAfterFrontmatter: parsed.blankAfterFrontmatter,
+    }),
+    file,
+  );
+});
+
+test("openRefusalReason: every UI-round-trip hazard refuses; clean posts pass", () => {
+  const meta = (over = {}) => ({
+    title: "Fine Title",
+    description: "Fine description.",
+    tags: ["tech"],
+    ...over,
+  });
+  assert.equal(openRefusalReason(meta(), "body"), null);
+  assert.match(openRefusalReason(meta({ description: "   " }), "b"), /description is blank/);
+  assert.match(openRefusalReason(meta({ title: "Two\nLines" }), "b"), /spans multiple lines/);
+  assert.match(openRefusalReason(meta({ title: " Padded " }), "b"), /leading\/trailing whitespace/);
+  assert.match(openRefusalReason(meta({ description: "d\r\ne" }), "b"), /spans multiple lines/);
+  assert.match(openRefusalReason(meta({ tags: ["ok", "a,b"] }), "b"), /contains a comma/);
+  assert.match(openRefusalReason(meta({ tags: [" pad "] }), "b"), /surrounding whitespace/);
+  assert.match(openRefusalReason(meta({ tags: [""] }), "b"), /empty tag/);
+  assert.match(openRefusalReason(meta({ tags: ["日本語"] }), "b"), /no slug form/);
+  assert.match(openRefusalReason(meta({ title: "!!!" }), "b"), /no slug form/);
+  assert.match(openRefusalReason(meta({ title: "x".repeat(220) }), "b"), /200-character/);
+  // Hazard 8: a body that cannot fit the save cap refuses at open (UTF-8 bytes).
+  const hugeBody = "é".repeat(SAVE_BODY_LIMIT / 2); // 2 bytes each in UTF-8
+  assert.match(openRefusalReason(meta(), hugeBody), /too large to save/);
+});
+
+test("adopt: open an existing post, edit, save — pubDate preserved, no rename", async () => {
+  const dir = await makeDir();
+  const original = legacyFile({ title: "Old Post", pubDate: "2019-08-07" });
+  await fsp.writeFile(join(dir, "old-post-file.md"), original);
+  const store = new PostStore({ dir, clock: () => new Date("2026-07-19T10:00:00") });
+
+  const posts = await store.listPosts();
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].openable, true);
+  assert.equal(posts[0].relPath, "old-post-file.md");
+  assert.equal(posts[0].title, "Old Post");
+
+  const opened = await store.openPost(posts[0].fileId);
+  assert.ok(opened.postId);
+  assert.equal(opened.pubDate, "2019-08-07");
+  assert.equal(opened.slug, "old-post-file");
+  assert.equal(opened.wysiwygUnsafe, false);
+  assert.equal(renderPostFile({ ...opened, pubDate: opened.pubDate }, opened.body), original);
+
+  // No-edit save: byte-identical file (single trailing newline already).
+  const saved = await store.save({
+    input: { title: opened.title, description: opened.description, tags: opened.tags, body: opened.body },
+    mode: "update",
+    postId: opened.postId,
+    rev: opened.rev,
+  });
+  assert.equal(await fsp.readFile(join(dir, "old-post-file.md"), "utf8"), original);
+
+  // Title edit: same file updated, pubDate still original, never renamed.
+  await store.save({
+    input: { title: "Renamed Title", description: opened.description, tags: opened.tags, body: "New body.\n" },
+    mode: "update",
+    postId: opened.postId,
+    rev: saved.rev,
+  });
+  assert.deepEqual(await mdFiles(dir), ["old-post-file.md"]);
+  const after = await fsp.readFile(join(dir, "old-post-file.md"), "utf8");
+  assert.match(after, /^title: "Renamed Title"$/m);
+  assert.match(after, /^pubDate: 2019-08-07$/m);
+});
+
+test("adopt: conflict semantics — external edit, replaced inode, stale rev, unknown fileId", async () => {
+  const dir = await makeDir();
+  const file = join(dir, "legacy.md");
+  await fsp.writeFile(file, legacyFile());
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+
+  // Unknown fileId → refused, nothing touched.
+  await assert.rejects(store.openPost("not-a-minted-id"), ConflictError);
+
+  // External in-place edit between open and save → 409, file untouched.
+  const opened = await store.openPost(fileId);
+  const external = legacyFile({ body: "Externally edited." });
+  await fsp.writeFile(file, external);
+  await assert.rejects(
+    store.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "mine" },
+      mode: "update",
+      postId: opened.postId,
+      rev: opened.rev,
+    }),
+    ConflictError,
+  );
+  assert.equal(await fsp.readFile(file, "utf8"), external);
+
+  // Replaced file (same bytes, new inode) → 409 (identity check), and the
+  // replacement's bytes are untouched by the rejection.
+  const opened2 = await store.openPost(fileId);
+  const bytes = await fsp.readFile(file);
+  await fsp.unlink(file);
+  await fsp.writeFile(file, bytes);
+  await assert.rejects(
+    store.save({
+      input: { title: opened2.title, description: opened2.description, tags: opened2.tags, body: "mine" },
+      mode: "update",
+      postId: opened2.postId,
+      rev: opened2.rev,
+    }),
+    ConflictError,
+  );
+  assert.ok((await fsp.readFile(file)).equals(bytes));
+
+  // Two adoptions of one file: first save wins, second 409s (never merged).
+  const a = await store.openPost(fileId);
+  const b = await store.openPost(fileId);
+  await store.save({
+    input: { title: a.title, description: a.description, tags: a.tags, body: "A's edit." },
+    mode: "update",
+    postId: a.postId,
+    rev: a.rev,
+  });
+  await assert.rejects(
+    store.save({
+      input: { title: b.title, description: b.description, tags: b.tags, body: "B's edit." },
+      mode: "update",
+      postId: b.postId,
+      rev: b.rev, // stale: A already published
+    }),
+    ConflictError,
+  );
+  assert.match(await fsp.readFile(file, "utf8"), /A's edit\./);
+});
+
+test("adopt: open refuses un-round-trippable and unknown-key files; listing surfaces reasons", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(join(dir, "good.md"), legacyFile({ title: "Good" }));
+  await fsp.writeFile(
+    join(dir, "extra-key.md"),
+    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nupdatedDate: 2022-01-01\n---\n\nB\n',
+  );
+  await fsp.writeFile(join(dir, "comma-tag.md"), legacyFile({ tags: ["a,b"] }));
+  await fsp.writeFile(join(dir, ".hidden.md"), legacyFile());
+  await fsp.writeFile(join(dir, ".good.md.tmp"), "stale temp");
+  // Underscore files ARE collection members under the v5 glob loader (the
+  // seo tests build pages for them) — they must be listed and openable.
+  await fsp.writeFile(join(dir, "_underscore.md"), legacyFile({ title: "Underscore" }));
+  // Symlinked .md: outside the write model (inode identity), never listed.
+  await fsp.writeFile(join(dir, "..outside-target.md"), legacyFile());
+  await fsp.symlink(join(dir, "..outside-target.md"), join(dir, "sym-link.md"));
+  await fsp.mkdir(join(dir, "series"));
+  await fsp.writeFile(join(dir, "series", "nested.md"), legacyFile());
+  await fsp.mkdir(join(dir, ".omc"));
+  await fsp.writeFile(join(dir, ".omc", "state.md"), "not a post");
+
+  const store = new PostStore({ dir });
+  const posts = await store.listPosts();
+  const byPath = Object.fromEntries(posts.map((p) => [p.relPath, p]));
+
+  // Dotfiles, temps, dot-dirs, and symlinks never appear; underscore files do.
+  assert.deepEqual(Object.keys(byPath).sort(), [
+    "_underscore.md",
+    "comma-tag.md",
+    "extra-key.md",
+    "good.md",
+    "series/nested.md",
+  ]);
+  assert.equal(byPath["good.md"].openable, true);
+  assert.equal(byPath["_underscore.md"].openable, true);
+  assert.equal(byPath["extra-key.md"].openable, false);
+  assert.match(byPath["extra-key.md"].reason, /"updatedDate"/);
+  assert.equal(byPath["comma-tag.md"].openable, false);
+  assert.match(byPath["comma-tag.md"].reason, /comma/);
+  assert.equal(byPath["series/nested.md"].openable, false);
+  assert.equal(byPath["series/nested.md"].reason, NESTED_POST_REASON);
+
+  // openPost enforces the same refusals (409-shaped ConflictError).
+  await assert.rejects(store.openPost(byPath["extra-key.md"].fileId), ConflictError);
+  await assert.rejects(store.openPost(byPath["comma-tag.md"].fileId), ConflictError);
+  await assert.rejects(store.openPost(byPath["series/nested.md"].fileId), ConflictError);
+
+  // fileIds are stable across repeated listings.
+  const again = await store.listPosts();
+  assert.equal(again.find((p) => p.relPath === "good.md").fileId, byPath["good.md"].fileId);
+
+  // openPost refusal reasons are distinct per D3 case (criterion 9), not one
+  // generic message.
+  await assert.rejects(store.openPost(byPath["comma-tag.md"].fileId), /comma/);
+  await fsp.writeFile(join(dir, "multiline.md"), legacyFile({ title: "Two\nLines" }));
+  await fsp.writeFile(join(dir, "blank-desc.md"), legacyFile({ description: "   " }));
+  const withNew = await store.listPosts();
+  const idOf = (rel) => withNew.find((p) => p.relPath === rel).fileId;
+  await assert.rejects(store.openPost(idOf("multiline.md")), /multiple lines/);
+  await assert.rejects(store.openPost(idOf("blank-desc.md")), /description is blank/);
+
+  // Pruning (plan D1 rebuild semantics): a deleted file's token vanishes on
+  // the next listing and its old fileId can no longer open anything.
+  const goodId = byPath["good.md"].fileId;
+  await fsp.unlink(join(dir, "good.md"));
+  const afterDelete = await store.listPosts();
+  assert.equal(afterDelete.find((p) => p.relPath === "good.md"), undefined);
+  await assert.rejects(store.openPost(goodId), /unknown fileId/);
+});
+
+test("adopt: invalid UTF-8 refuses at open (a save would rewrite the bytes)", async () => {
+  const dir = await makeDir();
+  const good = Buffer.from(legacyFile(), "utf8");
+  const corrupt = Buffer.concat([good.subarray(0, good.length - 2), Buffer.from([0xff, 0xfe]), good.subarray(good.length - 2)]);
+  await fsp.writeFile(join(dir, "corrupt.md"), corrupt);
+  const store = new PostStore({ dir });
+  const posts = await store.listPosts();
+  assert.equal(posts[0].openable, false);
+  assert.match(posts[0].reason, /not valid UTF-8/);
+  await assert.rejects(store.openPost(posts[0].fileId), /not valid UTF-8/);
+  // Untouched on refusal.
+  assert.ok((await fsp.readFile(join(dir, "corrupt.md"))).equals(corrupt));
+});
+
+test("listing order: pubDate descending, ties by relPath, no-date entries last", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(join(dir, "old.md"), legacyFile({ pubDate: "2020-01-01" }));
+  await fsp.writeFile(join(dir, "newest.md"), legacyFile({ pubDate: "2026-07-18" }));
+  await fsp.writeFile(join(dir, "mid-b.md"), legacyFile({ pubDate: "2023-05-05" }));
+  await fsp.writeFile(join(dir, "mid-a.md"), legacyFile({ pubDate: "2023-05-05" }));
+  await fsp.writeFile(join(dir, "unparseable.md"), "# not a post\n");
+  await fsp.mkdir(join(dir, "series"));
+  await fsp.writeFile(join(dir, "series", "nested.md"), legacyFile({ pubDate: "2027-01-01" }));
+  const store = new PostStore({ dir });
+  const order = (await store.listPosts()).map((p) => p.relPath);
+  assert.deepEqual(order, [
+    "newest.md",
+    "mid-a.md",
+    "mid-b.md",
+    "old.md",
+    "series/nested.md", // no parsed pubDate (nested posts aren't read)
+    "unparseable.md",
+  ]);
+});
+
+test("adopt: wysiwygUnsafe is the union of all lossy detectors", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(join(dir, "iframe.md"), legacyFile({ body: '<div class="video">\n<iframe src="https://x"></iframe>\n</div>' }));
+  await fsp.writeFile(join(dir, "titled.md"), legacyFile({ body: 'Intro.\n\n![alt](/images/x.png "a title")' }));
+  await fsp.writeFile(join(dir, "clean.md"), legacyFile({ body: "Plain **markdown** only." }));
+  const store = new PostStore({ dir });
+  const posts = await store.listPosts();
+  const open = async (rel) => store.openPost(posts.find((p) => p.relPath === rel).fileId);
+  assert.equal((await open("iframe.md")).wysiwygUnsafe, true);
+  assert.equal((await open("titled.md")).wysiwygUnsafe, true); // titled-image-only fixture
+  assert.equal((await open("clean.md")).wysiwygUnsafe, false);
+});
+
+// The 19 git-tracked posts — pinned by name so a silently missing or
+// deleted corpus post FAILS this suite (a derived-only expectation would
+// shrink with the directory and still pass). Working trees may hold extra
+// drafts; those are covered by the derived comparison below.
+const TRACKED_POSTS = [
+  "2d-search-kotlin-hackerrank.md",
+  "acm-icpc-team-finder-algorithm.md",
+  "back-to-blogging.md",
+  "base-calse-in-dart.md",
+  "breaking-the-record.md",
+  "companion-object-vs-factory-keyword.md",
+  "exploring-the-searchbar-widget-in-flutter.md",
+  "final-keyword-for-classes.md",
+  "flutter-refreshindicator-widget.md",
+  "interface-keyword-in-dart.md",
+  "isolates-in-dart.md",
+  "sealed-classes-in-kotlin.md",
+  "solid-principles-in-counter-app-riverpod.md",
+  "switch-expression-in-dart-310.md",
+  "understanding-livedata-stateflow-sharedflow-and-flow-in-android.md",
+  "what-is-floor-dart.md",
+  "what-is-never-in-dart.md",
+  "whats-is-managed-and-unmanaged-code-in-dot-net.md",
+  "why-or-how-fluter-renders-quickly.md",
+];
+
+test("real corpus: every current post lists as openable and parses (read-only)", async () => {
+  // _seo-fixture-* files are transient artifacts of the concurrently-running
+  // seo tests — excluded to keep this test deterministic under `node --test`
+  // parallelism, not because the editor excludes them.
+  const isFixture = (name) => name.startsWith("_seo-fixture-");
+  const expected = (await fsp.readdir(REAL_BLOG_DIR, { withFileTypes: true }))
+    .filter((e) => e.isFile() && e.name.endsWith(".md") && !e.name.startsWith(".") && !isFixture(e.name))
+    .map((e) => e.name)
+    .sort();
+  const store = new PostStore({ dir: REAL_BLOG_DIR });
+  const posts = await store.listPosts();
+  const topLevel = posts.filter((p) => !p.relPath.includes("/") && !isFixture(p.relPath));
+  const listed = topLevel.map((p) => p.relPath).sort();
+  assert.deepEqual(listed, expected);
+  // Every pinned tracked post MUST be present — deletion/omission fails here.
+  for (const name of TRACKED_POSTS) {
+    assert.ok(listed.includes(name), `tracked post missing from listing: ${name}`);
+  }
+  // Newest-first ordering holds over the real corpus.
+  for (let i = 1; i < topLevel.length; i++) {
+    assert.ok(
+      topLevel[i - 1].pubDate >= topLevel[i].pubDate,
+      `${topLevel[i - 1].relPath} (${topLevel[i - 1].pubDate}) should sort before ${topLevel[i].relPath} (${topLevel[i].pubDate})`,
+    );
+  }
+  for (const post of topLevel) {
+    assert.equal(post.openable, true, `${post.relPath}: ${post.reason ?? ""}`);
+    const opened = await store.openPost(post.fileId);
+    // The writer must reproduce every current post byte-for-byte (allowing
+    // only trailing-newline normalization) — proof of a faithful round-trip.
+    const original = await fsp.readFile(join(REAL_BLOG_DIR, post.relPath), "utf8");
+    const rewritten = renderPostFile({ ...opened, pubDate: opened.pubDate }, opened.body, {
+      blankAfterFrontmatter: opened.blankAfterFrontmatter,
+    });
+    assert.equal(rewritten, original.replace(/\n+$/, "\n"), post.relPath);
+  }
+});
+
+test("real corpus fixtures: no-edit save is byte-identical (escaped quotes, raw HTML)", async () => {
+  for (const name of [
+    "whats-is-managed-and-unmanaged-code-in-dot-net.md",
+    "why-or-how-fluter-renders-quickly.md",
+    "back-to-blogging.md",
+  ]) {
+    const dir = await makeDir();
+    const original = await fsp.readFile(join(REAL_BLOG_DIR, name), "utf8");
+    await fsp.writeFile(join(dir, name), original);
+    const store = new PostStore({ dir });
+    const [{ fileId, openable }] = await store.listPosts();
+    assert.equal(openable, true, name);
+    const opened = await store.openPost(fileId);
+    await store.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: opened.body },
+      mode: "update",
+      postId: opened.postId,
+      rev: opened.rev,
+    });
+    const after = await fsp.readFile(join(dir, name), "utf8");
+    assert.equal(after, original.replace(/\n+$/, "\n"), name);
+  }
+});
+
+test("adopt: a symlink swapped in after listing cannot be opened (O_NOFOLLOW)", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(join(dir, "victim.md"), legacyFile({ title: "Victim" }));
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+  // TOCTOU: after listing (isFile passed), replace the path with a symlink.
+  await fsp.unlink(join(dir, "victim.md"));
+  await fsp.writeFile(join(dir, ".target.md"), legacyFile({ title: "Elsewhere" }));
+  await fsp.symlink(join(dir, ".target.md"), join(dir, "victim.md"));
+  await assert.rejects(store.openPost(fileId), /symlink/);
+
+  // Same guard on the update path: adopt a real file, then swap the path for
+  // a symlink pointing at the ORIGINAL inode (which would pass the ino check
+  // if the open followed it).
+  const dir2 = await makeDir();
+  await fsp.writeFile(join(dir2, "post.md"), legacyFile());
+  const store2 = new PostStore({ dir: dir2 });
+  const [{ fileId: id2 }] = await store2.listPosts();
+  const opened = await store2.openPost(id2);
+  await fsp.rename(join(dir2, "post.md"), join(dir2, ".moved.md"));
+  await fsp.symlink(join(dir2, ".moved.md"), join(dir2, "post.md"));
+  await assert.rejects(
+    store2.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "x" },
+      mode: "update",
+      postId: opened.postId,
+      rev: opened.rev,
+    }),
+    ConflictError,
+  );
+  // The real content (behind the moved file) is untouched.
+  assert.equal(await fsp.readFile(join(dir2, ".moved.md"), "utf8"), legacyFile());
+});
+
+test("adopt: body-only edit leaves the frontmatter block byte-identical (criterion 2)", async () => {
+  const dir = await makeDir();
+  const original = legacyFile({ title: "Stable Meta", pubDate: "2018-11-30" });
+  await fsp.writeFile(join(dir, "stable-meta.md"), original);
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+  const opened = await store.openPost(fileId);
+  const fmOf = (text) => text.split("\n---\n")[0] + "\n---\n";
+  const beforeFm = fmOf(await fsp.readFile(join(dir, "stable-meta.md"), "utf8"));
+  await store.save({
+    input: { title: opened.title, description: opened.description, tags: opened.tags, body: "A completely new body.\n" },
+    mode: "update",
+    postId: opened.postId,
+    rev: opened.rev,
+  });
+  const after = await fsp.readFile(join(dir, "stable-meta.md"), "utf8");
+  assert.equal(fmOf(after), beforeFm); // description, tags, pubDate, title bytes untouched
+  assert.match(after, /A completely new body\./);
+});
+
+test("adopt: arbitrary unknown frontmatter key refuses at open, naming the key (criterion 3)", async () => {
+  const dir = await makeDir();
+  await fsp.writeFile(
+    join(dir, "custom.md"),
+    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\ncustomField: "x"\n---\n\nB\n',
+  );
+  const store = new PostStore({ dir });
+  const [{ fileId, openable, reason }] = await store.listPosts();
+  assert.equal(openable, false);
+  assert.match(reason, /"customField"/);
+  await assert.rejects(store.openPost(fileId), /"customField"/);
+});
+
+test("adopt: explicit stale-rev and unknown-postId conflicts leave the file byte-identical (criterion 4)", async () => {
+  const dir = await makeDir();
+  const original = legacyFile({ title: "Immutable On 409" });
+  const file = join(dir, "immutable-on-409.md");
+  await fsp.writeFile(file, original);
+  const store = new PostStore({ dir });
+  const [{ fileId }] = await store.listPosts();
+  const opened = await store.openPost(fileId);
+
+  // Wrong client rev (registry and disk agree; client is stale/fabricated).
+  await assert.rejects(
+    store.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "x" },
+      mode: "update",
+      postId: opened.postId,
+      rev: sha256(Buffer.from("some other content")),
+    }),
+    /stale rev/,
+  );
+  assert.equal(await fsp.readFile(file, "utf8"), original);
+
+  // Unknown postId for an adopted-post update.
+  await assert.rejects(
+    store.save({
+      input: { title: opened.title, description: opened.description, tags: opened.tags, body: "x" },
+      mode: "update",
+      postId: "never-minted-post-id",
+      rev: opened.rev,
+    }),
+    /unknown postId/,
+  );
+  assert.equal(await fsp.readFile(file, "utf8"), original);
+
+  // Unknown fileId open attempt cannot touch anything either.
+  await assert.rejects(store.openPost("never-minted-file-id"), /unknown fileId/);
+  assert.equal(await fsp.readFile(file, "utf8"), original);
+});

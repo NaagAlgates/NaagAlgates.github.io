@@ -30,13 +30,19 @@ import "prismjs/themes/prism.css";
 import codeSyntaxHighlight from "@toast-ui/editor-plugin-code-syntax-highlight";
 import "@toast-ui/editor-plugin-code-syntax-highlight/dist/toastui-editor-plugin-code-syntax-highlight.css";
 import DOMPurify from "dompurify";
-import { hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
+import { hasRawHtml, hasSizedImage, hasTitledImage } from "./markdown-flags.mjs";
 import {
   TOOLBAR_ITEMS,
   CODE_LANGUAGES,
+  applyOpenedPost,
   languageMatches,
   languageKeyAction,
+  opSequencer,
 } from "./editor-config.mjs";
+
+// Guards overlapping open/save/reset: a late response must never rebind
+// postId/rev after the editor moved to a different post (see opSequencer).
+const ops = opSequencer();
 
 // The plugin builds its language list from Object.keys(highlighter.languages)
 // and calls highlighter.highlight(code, grammar, lang) / .tokenize(code,
@@ -53,11 +59,14 @@ curatedHighlighter.languages = Object.fromEntries(
 );
 
 /** Every WYSIWYG-lossy construct the markdown contains, or null — the
- * warning must name ALL of them, or the unnamed one is silently lost. */
+ * warning must name ALL of them, or the unnamed one is silently lost.
+ * Raw HTML is lossy wholesale (issue #53, empirically: iframes removed,
+ * figure/figcaption flattened, img attributes dropped). */
 function lossyConstruct(md) {
   const found = [];
   if (hasTitledImage(md)) found.push('image titles (![alt](url "title"))');
   if (hasSizedImage(md)) found.push("image width/height attributes (<img ... width>)");
+  if (hasRawHtml(md)) found.push("raw HTML (iframes, figures, inline tags)");
   return found.length ? found.join(" and ") : null;
 }
 
@@ -347,10 +356,14 @@ function clientSlug(text) {
 // session without the postId/rev the server assigned. Re-adopt them from the
 // server's last successful save when it unambiguously matches this draft.
 async function adoptLastSave() {
+  // Recovery is also an async rebinding op: a late response must not undo a
+  // reset ("Start a new post") or fight an open that happened meanwhile.
+  const token = ops.begin();
   try {
     const res = await fetch("/_editor/api/last-save");
     if (!res.ok) return;
     const last = await res.json();
+    if (!ops.isCurrent(token)) return;
     const title = document.getElementById("title").value;
     if (!postId && last.slug && last.slug === clientSlug(title)) {
       postId = last.postId;
@@ -369,9 +382,93 @@ async function adoptLastSave() {
 restoreSession();
 adoptLastSave();
 
+// --- Open an existing post (issue #53) ---------------------------------
+// Both endpoints are POST so they carry the full security gate (Origin +
+// custom header force a preflight cross-origin, which can never succeed).
+const openSelect = document.getElementById("open-select");
+const openBtn = document.getElementById("open");
+
+async function loadPostList() {
+  try {
+    const res = await fetch("/_editor/api/posts", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-blog-editor": "1" },
+      body: "{}",
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const post of data.posts) {
+      const option = document.createElement("option");
+      option.value = post.fileId;
+      option.textContent = post.openable
+        ? `${post.title} (${post.relPath})`
+        : `${post.relPath} — cannot open`;
+      if (!post.openable) {
+        option.disabled = true;
+        option.title = post.reason || "";
+      }
+      openSelect.appendChild(option);
+    }
+  } catch {
+    /* listing is best-effort; authoring new posts still works */
+  }
+}
+loadPostList();
+
+openBtn.addEventListener("click", async () => {
+  const fileId = openSelect.value;
+  if (!fileId) return;
+  // Moving to a different post: invalidate any in-flight save/open response.
+  const token = ops.invalidate();
+  openBtn.disabled = true;
+  saveBtn.disabled = true;
+  setStatus("", "Opening…");
+  try {
+    const res = await fetch("/_editor/api/open", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-blog-editor": "1" },
+      body: JSON.stringify({ fileId }),
+    });
+    const data = await res.json();
+    if (!ops.isCurrent(token)) return; // superseded by a newer open/reset
+    if (!res.ok) {
+      setStatus("err", `Not opened: ${data.error || res.status}`);
+      return;
+    }
+    document.getElementById("title").value = data.title;
+    document.getElementById("description").value = data.description;
+    document.getElementById("tags").value = data.tags.join(", ");
+    // An override granted for the PREVIOUS draft must not carry into the
+    // newly opened post — its first WYSIWYG switch has to be blocked again.
+    lossyOverrideUntil = 0;
+    // Binding order (plan D4): for a WYSIWYG-unsafe post the mode switch MUST
+    // precede the body injection — applyOpenedPost owns that contract.
+    const unsafe = applyOpenedPost(editor, data);
+    mdSnapshot = data.body;
+    postId = data.postId;
+    rev = data.rev;
+    persistSession();
+    setStatus(
+      "ok",
+      `Editing ${data.relPath} — Save will update this file (never rename it).` +
+        (unsafe
+          ? "\nOpened in the Markdown tab: this post contains content the " +
+            "WYSIWYG view would corrupt (raw HTML or titled images)."
+          : ""),
+    );
+  } catch (e) {
+    if (ops.isCurrent(token)) setStatus("err", `Not opened: ${e}`);
+  } finally {
+    openBtn.disabled = false;
+    saveBtn.disabled = false;
+  }
+});
+
 // Recovery path for genuinely lost ownership (e.g. dev-server restart):
 // unlink from the saved file but keep the text, so Save creates a new post.
 document.getElementById("reset").addEventListener("click", () => {
+  ops.invalidate(); // in-flight save/open/recovery responses must not rebind this draft
+  lossyOverrideUntil = 0; // a fresh draft starts with full lossy protection
   postId = null;
   rev = null;
   sessionStorage.removeItem(SESSION_KEY);
@@ -383,7 +480,9 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 
 saveBtn.addEventListener("click", async () => {
+  const token = ops.begin(); // a later open/reset makes this save's response stale
   saveBtn.disabled = true;
+  openBtn.disabled = true;
   setStatus("", "Saving…");
   // Persist the draft BEFORE the request: the save triggers a content-change
   // reload that can beat the response, and the restored page re-adopts
@@ -409,6 +508,12 @@ saveBtn.addEventListener("click", async () => {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
+    if (!ops.isCurrent(token)) {
+      // The editor moved to a different post while this save was in flight;
+      // rebinding postId/rev now would make the next save hit the wrong file.
+      setStatus("err", "A save finished after you switched posts — its result was ignored. Re-open the post you want to keep editing.");
+      return;
+    }
     if (res.ok) {
       postId = data.postId;
       rev = data.rev;
@@ -429,8 +534,9 @@ saveBtn.addEventListener("click", async () => {
       setStatus("err", `Not saved: ${data.error || res.status}`);
     }
   } catch (e) {
-    setStatus("err", `Not saved: ${e}`);
+    if (ops.isCurrent(token)) setStatus("err", `Not saved: ${e}`);
   } finally {
     saveBtn.disabled = false;
+    openBtn.disabled = false;
   }
 });

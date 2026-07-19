@@ -109,6 +109,47 @@ export function languageKeyAction(key, hasQuery, visibleCount) {
 }
 
 /**
+ * Fill the editor with an opened post's body, enforcing the ordering the
+ * empirical issue-#53 probe made binding: when the post is WYSIWYG-unsafe,
+ * the editor MUST be in markdown mode BEFORE the body is injected — injecting
+ * while the WYSIWYG model is active runs the destructive conversion (iframes
+ * removed, figure/figcaption flattened, image attributes dropped) during the
+ * open itself. Pure decision logic over an editor-shaped API so node:test can
+ * pin the call order with a recording mock; client.mjs passes the real editor.
+ * @param {{ isMarkdownMode: () => boolean,
+ *           changeMode: (mode: string, silent?: boolean) => void,
+ *           setMarkdown: (body: string) => void }} editorApi
+ * @param {{ body: string, wysiwygUnsafe: boolean }} post
+ * @returns {boolean} whether the post was treated as WYSIWYG-unsafe
+ */
+export function applyOpenedPost(editorApi, post) {
+  if (post.wysiwygUnsafe && !editorApi.isMarkdownMode()) {
+    editorApi.changeMode("markdown", true);
+  }
+  editorApi.setMarkdown(post.body);
+  return Boolean(post.wysiwygUnsafe);
+}
+
+/**
+ * Guards async open/save responses against rebinding a draft that has moved
+ * on (issue #53 round-2 review): a save response that lands AFTER the user
+ * opened a different post must not restore the old postId/rev — the next
+ * save would overwrite the wrong file. Every operation captures the current
+ * epoch via begin(); anything that moves the editor to a different binding
+ * (open, reset) calls invalidate(); a response only applies if isCurrent()
+ * still holds for its captured token. Pure, so node:test can pin the
+ * interleavings without a browser.
+ */
+export function opSequencer() {
+  let epoch = 0;
+  return {
+    begin: () => epoch,
+    invalidate: () => ++epoch,
+    isCurrent: (token) => token === epoch,
+  };
+}
+
+/**
  * Vite `optimizeDeps.include` for the editor client. Every bundled specifier
  * the client imports must be listed here, or Vite discovers the un-listed ones
  * on first /_editor load and triggers a mid-session re-optimization reload

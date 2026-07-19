@@ -10,12 +10,14 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   TOOLBAR_ITEMS,
+  applyOpenedPost,
   codeGroupIndex,
   CODE_LANGUAGES,
   PRISM_COMPONENT_LANGUAGES,
   editorOptimizeDepsInclude,
   languageMatches,
   languageKeyAction,
+  opSequencer,
 } from "./editor-config.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -250,4 +252,62 @@ test("integration.mjs uses the shared optimizeDeps helper (not a hand-maintained
     /include:\s*editorOptimizeDepsInclude\(\)/,
     "integration.mjs builds optimizeDeps.include from the shared, tested helper",
   );
+});
+
+test("applyOpenedPost: markdown mode is established BEFORE body injection for unsafe posts", () => {
+  // Recording mock: the whole point is the call ORDER (issue #53 — injecting
+  // into an active WYSIWYG model runs the destructive conversion at open).
+  const calls = [];
+  const mockEditor = (markdownMode) => ({
+    isMarkdownMode: () => {
+      calls.push("isMarkdownMode");
+      return markdownMode;
+    },
+    changeMode: (mode, silent) => calls.push(`changeMode:${mode}:${silent}`),
+    setMarkdown: () => calls.push("setMarkdown"),
+  });
+
+  // Unsafe + editor in WYSIWYG: switch strictly precedes injection.
+  calls.length = 0;
+  let unsafe = applyOpenedPost(mockEditor(false), { body: "<iframe></iframe>", wysiwygUnsafe: true });
+  assert.equal(unsafe, true);
+  const changeIdx = calls.indexOf("changeMode:markdown:true");
+  const setIdx = calls.indexOf("setMarkdown");
+  assert.ok(changeIdx !== -1, "changeMode must be called");
+  assert.ok(changeIdx < setIdx, "changeMode must precede setMarkdown");
+
+  // Unsafe + already markdown: no redundant switch, body still injected.
+  calls.length = 0;
+  unsafe = applyOpenedPost(mockEditor(true), { body: "<i>x</i>", wysiwygUnsafe: true });
+  assert.equal(unsafe, true);
+  assert.ok(!calls.some((c) => c.startsWith("changeMode")));
+  assert.ok(calls.includes("setMarkdown"));
+
+  // Safe post: no forced switch.
+  calls.length = 0;
+  unsafe = applyOpenedPost(mockEditor(false), { body: "plain", wysiwygUnsafe: false });
+  assert.equal(unsafe, false);
+  assert.ok(!calls.some((c) => c.startsWith("changeMode")));
+  assert.ok(calls.includes("setMarkdown"));
+});
+
+test("opSequencer: a response from before an invalidation never applies", () => {
+  const ops = opSequencer();
+  // Normal save: token captured, nothing moved, response applies.
+  let t = ops.begin();
+  assert.equal(ops.isCurrent(t), true);
+  // Save in flight, then an open (invalidate): the save response is stale.
+  t = ops.begin();
+  ops.invalidate();
+  assert.equal(ops.isCurrent(t), false);
+  // The open's own token stays current until something newer invalidates.
+  const openToken = ops.invalidate();
+  assert.equal(ops.isCurrent(openToken), true);
+  // A second open supersedes the first's in-flight response.
+  const second = ops.invalidate();
+  assert.equal(ops.isCurrent(openToken), false);
+  assert.equal(ops.isCurrent(second), true);
+  // Reset invalidates too.
+  ops.invalidate();
+  assert.equal(ops.isCurrent(second), false);
 });

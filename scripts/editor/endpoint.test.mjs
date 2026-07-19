@@ -339,3 +339,250 @@ test("endpoint: editor page is served and loads the client module", async (t) =>
   });
   assert.notEqual(other.status, 200);
 });
+
+// ---------------------------------------------------------------------------
+// Issue #53: list + open-existing endpoints.
+
+const LEGACY_FILE =
+  '---\ntitle: "Legacy Post"\ndescription: "Legacy description."\npubDate: 2020-02-02\ntags: ["Flutter"]\n---\n\nIntro.\n\n<iframe src="https://x"></iframe>\n';
+
+test("endpoint: list + open + edit-save lifecycle for an existing post", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+  await fsp.writeFile(join(blogDir, "legacy-post.md"), LEGACY_FILE);
+
+  const list = await request(port, {
+    method: "POST",
+    path: "/_editor/api/posts",
+    headers: goodPostHeaders(port),
+    body: "{}",
+  });
+  assert.equal(list.status, 200);
+  const { posts } = JSON.parse(list.body);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].relPath, "legacy-post.md");
+  assert.equal(posts[0].openable, true);
+
+  const open = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ fileId: posts[0].fileId }),
+  });
+  assert.equal(open.status, 200);
+  const opened = JSON.parse(open.body);
+  assert.equal(opened.title, "Legacy Post");
+  assert.equal(opened.pubDate, "2020-02-02");
+  assert.equal(opened.wysiwygUnsafe, true); // iframe fixture
+
+  const save = await request(port, {
+    method: "POST",
+    path: "/_editor/api/save",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({
+      mode: "update",
+      postId: opened.postId,
+      rev: opened.rev,
+      title: opened.title,
+      description: opened.description,
+      tags: opened.tags,
+      body: opened.body,
+    }),
+  });
+  assert.equal(save.status, 200);
+  // No-edit save left the file byte-identical; pubDate untouched.
+  assert.equal(await fsp.readFile(join(blogDir, "legacy-post.md"), "utf8"), LEGACY_FILE);
+});
+
+test("endpoint: open-existing error contract — 403 gate, 400 malformed, 409 refusals", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+  await fsp.writeFile(
+    join(blogDir, "extra-key.md"),
+    '---\ntitle: "T"\ndescription: "D"\npubDate: 2021-01-01\ntags: ["a"]\nimage: "/x.png"\n---\n\nB\n',
+  );
+
+  // Security gate: both new POSTs refuse without Origin / custom header.
+  for (const path of ["/_editor/api/posts", "/_editor/api/open"]) {
+    const noOrigin = await request(port, {
+      method: "POST",
+      path,
+      headers: { host: `localhost:${port}`, "x-blog-editor": "1", "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(noOrigin.status, 403, `${path} without Origin`);
+    const noHeader = await request(port, {
+      method: "POST",
+      path,
+      headers: { host: `localhost:${port}`, origin: `http://localhost:${port}`, "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(noHeader.status, 403, `${path} without X-Blog-Editor`);
+    assert.equal(noOrigin.headers["access-control-allow-origin"], undefined);
+  }
+
+  // Malformed → 400.
+  const missingId = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: "{}",
+  });
+  assert.equal(missingId.status, 400);
+  const badJson = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: "not json",
+  });
+  assert.equal(badJson.status, 400);
+
+  // Unknown fileId → 409.
+  const unknown = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ fileId: "never-minted" }),
+  });
+  assert.equal(unknown.status, 409);
+
+  // Un-round-trippable file: listed with a reason, open refused with 409.
+  const list = await request(port, {
+    method: "POST",
+    path: "/_editor/api/posts",
+    headers: goodPostHeaders(port),
+    body: "{}",
+  });
+  const { posts } = JSON.parse(list.body);
+  assert.equal(posts[0].openable, false);
+  const refused = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ fileId: posts[0].fileId }),
+  });
+  assert.equal(refused.status, 409);
+  // And the file was not touched by any of this.
+  assert.match(await fsp.readFile(join(blogDir, "extra-key.md"), "utf8"), /^image: "\/x\.png"$/m);
+});
+
+// Verifier gaps (criteria 6, 7, 9): CORS-header absence everywhere,
+// client-path rejection, and every D3 refusal as an end-to-end HTTP 409.
+
+const noCors = (res, label) => {
+  for (const name of Object.keys(res.headers)) {
+    assert.ok(!name.toLowerCase().startsWith("access-control-"), `${label}: unexpected CORS header ${name}`);
+  }
+};
+
+test("endpoint: no CORS headers on any response from the new endpoints (criterion 6)", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+  await fsp.writeFile(join(blogDir, "a-post.md"), LEGACY_FILE);
+
+  // Success responses.
+  const list = await request(port, { method: "POST", path: "/_editor/api/posts", headers: goodPostHeaders(port), body: "{}" });
+  assert.equal(list.status, 200);
+  noCors(list, "posts 200");
+  const { posts } = JSON.parse(list.body);
+  const open = await request(port, { method: "POST", path: "/_editor/api/open", headers: goodPostHeaders(port), body: JSON.stringify({ fileId: posts[0].fileId }) });
+  assert.equal(open.status, 200);
+  noCors(open, "open 200");
+
+  // Rejected responses, per endpoint: each missing-gate-header variant (403),
+  // malformed JSON (400), and unknown fileId (409) — all CORS-free.
+  for (const path of ["/_editor/api/posts", "/_editor/api/open"]) {
+    const gateVariants = [
+      ["no Origin and no editor header", { host: `localhost:${port}`, "content-type": "application/json" }],
+      ["Origin but no editor header", { host: `localhost:${port}`, origin: `http://localhost:${port}`, "content-type": "application/json" }],
+      ["editor header but no Origin", { host: `localhost:${port}`, "x-blog-editor": "1", "content-type": "application/json" }],
+    ];
+    for (const [label, headers] of gateVariants) {
+      const forbidden = await request(port, { method: "POST", path, headers, body: "{}" });
+      assert.equal(forbidden.status, 403, `${path}: ${label}`);
+      noCors(forbidden, `${path} 403 (${label})`);
+    }
+    const malformed = await request(port, { method: "POST", path, headers: goodPostHeaders(port), body: "not json" });
+    assert.equal(malformed.status, 400, `${path} malformed JSON`);
+    noCors(malformed, `${path} 400`);
+  }
+  const bad = await request(port, { method: "POST", path: "/_editor/api/open", headers: goodPostHeaders(port), body: "{}" });
+  assert.equal(bad.status, 400);
+  noCors(bad, "open 400 (missing fileId)");
+  const unknown = await request(port, { method: "POST", path: "/_editor/api/open", headers: goodPostHeaders(port), body: JSON.stringify({ fileId: "nope" }) });
+  assert.equal(unknown.status, 409);
+  noCors(unknown, "open 409");
+});
+
+test("endpoint: client-supplied paths are never accepted as identifiers (criterion 7)", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+  await fsp.writeFile(join(blogDir, "real-post.md"), LEGACY_FILE);
+
+  // path/relPath fields without a fileId: 400, never resolved.
+  const pathy = await request(port, {
+    method: "POST",
+    path: "/_editor/api/open",
+    headers: goodPostHeaders(port),
+    body: JSON.stringify({ path: `${blogDir}/real-post.md`, relPath: "real-post.md" }),
+  });
+  assert.equal(pathy.status, 400);
+
+  // A path-shaped fileId is just an unknown token — 409, nothing resolved.
+  for (const evil of ["real-post.md", "../real-post.md", "../../etc/passwd", "/etc/passwd"]) {
+    const res = await request(port, {
+      method: "POST",
+      path: "/_editor/api/open",
+      headers: goodPostHeaders(port),
+      body: JSON.stringify({ fileId: evil }),
+    });
+    assert.equal(res.status, 409, `fileId=${evil}`);
+    assert.match(JSON.parse(res.body).error, /unknown fileId/);
+  }
+});
+
+test("endpoint: every D3 refusal is an end-to-end HTTP 409 with its distinct reason (criterion 9)", async (t) => {
+  const { server, port, blogDir } = await bootServer();
+  t.after(() => server.close());
+
+  const legacy = (over) => {
+    const meta = {
+      title: '"T"',
+      description: '"D"',
+      pubDate: "2021-01-01",
+      tags: '["a"]',
+      body: "B",
+      extra: "",
+      ...over,
+    };
+    return `---\ntitle: ${meta.title}\ndescription: ${meta.description}\npubDate: ${meta.pubDate}\ntags: ${meta.tags}\n${meta.extra}---\n\n${meta.body}\n`;
+  };
+  const CASES = [
+    ["blank-desc.md", legacy({ description: '"   "' }), /description is blank/],
+    ["multiline-title.md", legacy({ title: JSON.stringify("Two\nLines") }), /spans multiple lines/],
+    ["untrimmed-title.md", legacy({ title: '" Padded "' }), /leading\/trailing whitespace/],
+    ["comma-tag.md", legacy({ tags: '["a,b"]' }), /contains a comma/],
+    ["nonslug-tag.md", legacy({ tags: '["日本語"]' }), /no slug form/],
+    ["unknown-key.md", legacy({ extra: 'customField: "x"\n' }), /"customField"/],
+    ["oversize.md", legacy({ body: "x".repeat(2 * 1024 * 1024) }), /too large to save/],
+  ];
+  for (const [name, content] of CASES) await fsp.writeFile(join(blogDir, name), content);
+  // Invalid UTF-8 needs raw bytes.
+  await fsp.writeFile(join(blogDir, "bad-utf8.md"), Buffer.concat([Buffer.from(legacy({})), Buffer.from([0xff, 0xfe])]));
+  CASES.push(["bad-utf8.md", null, /not valid UTF-8/]);
+
+  const list = await request(port, { method: "POST", path: "/_editor/api/posts", headers: goodPostHeaders(port), body: "{}" });
+  const { posts } = JSON.parse(list.body);
+  const idOf = (name) => posts.find((p) => p.relPath === name).fileId;
+
+  for (const [name, , reasonRe] of CASES) {
+    const res = await request(port, {
+      method: "POST",
+      path: "/_editor/api/open",
+      headers: goodPostHeaders(port),
+      body: JSON.stringify({ fileId: idOf(name) }),
+    });
+    assert.equal(res.status, 409, name);
+    assert.match(JSON.parse(res.body).error, reasonRe, name);
+  }
+});

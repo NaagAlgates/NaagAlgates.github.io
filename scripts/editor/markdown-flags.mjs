@@ -51,3 +51,24 @@ export function hasSizedImage(markdown) {
   }
   return found;
 }
+
+// ANY raw HTML (block or inline). Issue #53: the WYSIWYG round-trip was
+// empirically shown to REMOVE <iframe> embeds entirely and to destroy
+// <figure>/<figcaption> structure (and the <img> convertor keeps only
+// src/alt), so every html node is treated as WYSIWYG-unsafe. Deliberately
+// broader than hasSizedImage (a strict subset of this); the parser walk keeps
+// code fences/spans immune, same as the other detectors.
+export function hasRawHtml(markdown) {
+  let found = false;
+  const walk = (node) => {
+    if (!node || found) return;
+    if (node.type === "html") found = true;
+    if (node.children) for (const child of node.children) walk(child);
+  };
+  try {
+    walk(fromMarkdown(String(markdown)));
+  } catch {
+    return false; // unparseable input has nothing to protect
+  }
+  return found;
+}
