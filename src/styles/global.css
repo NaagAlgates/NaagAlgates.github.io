@@ -437,7 +437,7 @@ hr {
 }
 
 /* ---- Share row ------------------------------------------------------------ */
-.share {
+.post-actions {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -447,12 +447,12 @@ hr {
   padding: 14px 0;
   margin: 6px 0 30px;
 }
-.share .lbl {
+.post-actions .lbl {
   font-size: 12px;
   color: var(--muted);
   margin-right: 2px;
 }
-.share-btn {
+.post-action {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -465,16 +465,16 @@ hr {
   padding: 7px 11px;
   cursor: pointer;
 }
-.share-btn:hover {
+.post-action:hover {
   border-color: var(--accent);
   color: var(--accent);
   text-decoration: none;
 }
-.share-btn svg {
+.post-action svg {
   width: 15px;
   height: 15px;
 }
-.share-btn.copied {
+.post-action.copied {
   color: var(--accent);
   border-color: var(--accent);
 }
