@@ -51,12 +51,11 @@ So, what's the difference?
 
 There are a handful of differences.
 
-
-| Feature | `/clear` |`/compact`  |
-| --- | --- | --- |
+| Feature | `/clear` | `/compact` |
+| ------- | ------ | -------- |
 | Primary Action | Erases all history. | Summarises past history. |
-| Memory Effect |Resets context close to 0%.  | Reduces context size by up to 90%. |
+| Memory Effect | Resets context close to 0%. | Reduces context size by up to 90%. |
 | Code Awareness | Forgets all files discussed. | Remembers files and goals. |
 | Best Used For | Switching to a new task. | Fixing a "context full" error. |
 
-In future blogs, we will see all commands in detail 
+In future blogs, we will see all commands in detail
