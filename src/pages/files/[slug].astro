@@ -1,0 +1,33 @@
+---
+import { getCollection, render } from "astro:content";
+import type { CollectionEntry } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+export async function getStaticPaths() {
+  const files = await getCollection("files");
+
+  return files.map((file) => ({
+    params: { slug: `${file.id}.md` },
+    props: { file },
+  }));
+}
+
+interface Props {
+  file: CollectionEntry<"files">;
+}
+
+const { file } = Astro.props;
+const { Content } = await render(file);
+const title = file.data.title ?? `${file.id.split("/").at(-1) ?? "file"}.md`;
+const description = file.data.description ?? `View ${title} on Nagaraj's blog.`;
+---
+
+<BaseLayout title={title} description={description}>
+  <article>
+    <div class="prose">
+      <Content />
+    </div>
+
+    <a class="back-link" href="/">← all posts</a>
+  </article>
+</BaseLayout>
